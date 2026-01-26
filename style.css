@@ -1,0 +1,203 @@
+/* 遮罩层 */
+.st-swipe-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 10000;
+  backdrop-filter: blur(4px);
+  font-family: var(--main-font, sans-serif);
+  box-sizing: border-box;
+}
+
+.st-swipe-modal-overlay * {
+  box-sizing: border-box;
+}
+
+/* 容器 */
+.st-swipe-modal-container {
+  background: var(--mainColor, #222);
+  color: var(--text-color, white);
+  width: 85%;
+  max-width: 900px;
+  height: 85%;
+  max-height: 85vh;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--SmartThemeBorderColor);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  margin: auto;
+}
+
+/* 头部 */
+.st-swipe-modal-header {
+  padding: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.st-swipe-modal-header-top {
+  padding: 12px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: bold;
+  font-size: 1.1em;
+  gap: 10px;
+}
+
+.st-swipe-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.st-swipe-header-ops {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+/* 跳转列表 */
+.st-swipe-jump-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 16px 12px 16px;
+  transition: all 0.2s ease;
+  overflow-y: auto;
+  max-height: 120px;
+}
+
+.st-swipe-jump-list.hidden {
+  display: none;
+}
+
+.st-swipe-jump-item {
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.85em;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+
+.st-swipe-jump-item:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.st-swipe-jump-item.active {
+  background: #2ed573;
+  color: #000;
+  font-weight: bold;
+}
+
+/* 内容区 */
+.st-swipe-modal-content {
+  padding: 20px;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  scroll-behavior: smooth;
+}
+
+.st-swipe-card {
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  position: relative;
+  transition: all 0.2s ease;
+  scroll-margin-top: 10px;
+  width: 100%;
+}
+
+.st-swipe-card.active {
+  border-color: #2ed573;
+  background: rgba(46, 213, 115, 0.08);
+  box-shadow: inset 0 0 10px rgba(46, 213, 115, 0.1);
+}
+
+.st-swipe-card-badge {
+  font-size: 0.75em;
+  font-weight: bold;
+  opacity: 0.6;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.st-swipe-card.active .st-swipe-card-badge {
+  color: #2ed573;
+  opacity: 1;
+}
+
+.st-swipe-card-text {
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.6;
+  font-size: 1.05em;
+  color: var(--text-color, #eee);
+}
+
+/* 移动端适配 */
+@media (max-width: 600px) {
+  .st-swipe-modal-container {
+    width: 95%;
+    height: 90%;
+    max-height: 90vh;
+    border-radius: 8px;
+  }
+
+  .st-swipe-title {
+    font-size: 0.9em;
+  }
+
+  .st-swipe-modal-header-top {
+    padding: 8px 12px;
+  }
+
+  .st-swipe-modal-content {
+    padding: 12px;
+  }
+
+  .st-swipe-card {
+    padding: 12px;
+  }
+
+  .st-swipe-header-ops .menu_button {
+    width: 28px;
+    height: 28px;
+    font-size: 0.75em;
+    padding: 4px !important;
+  }
+
+  .st-swipe-jump-list {
+    padding: 0 12px 10px 12px;
+    gap: 4px;
+  }
+
+  .st-swipe-jump-item {
+    width: 26px;
+    height: 26px;
+    font-size: 0.7em;
+  }
+}
