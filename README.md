@@ -25,11 +25,7 @@
 
 - **纯预览模式**：默认仅预览，不会改变当前聊天的实际选中分支（除非使用「跳转/创建新存档」按钮）。
 
-<center>
-<video width="80%" controls loop>
-  <source src="https://stcard.pages.dev/examplepic/swipe示例视频.mp4" type="video/mp4">
-</video>
-</center>
+<video src="https://github.com/user-attachments/assets/def016fe-1760-4aee-b43d-771ed430c9ca.mp4" controls="controls" width="80%" loop></video>
 
 ## 安装方法
 
