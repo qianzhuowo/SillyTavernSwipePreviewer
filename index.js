@@ -199,8 +199,8 @@
     const modalId = "st-swipe-preview-modal";
     document.getElementById(modalId)?.remove();
 
-    const swipes = message.swipes;
-    const currentSwipeId = message.swipeId ?? 0;
+    let swipes = Array.isArray(message?.swipes) ? [...message.swipes] : [];
+    let currentSwipeId = Number.isInteger(message?.swipeId) ? message.swipeId : 0;
 
     const modalOverlay = document.createElement('div');
     modalOverlay.id = modalId;
@@ -274,8 +274,40 @@
       return text;
     };
 
-    const swipeTextsRaw = swipes.map(getSwipeText);
-    let swipeTexts = swipeTextsRaw;
+    let swipeTextsRaw = [];
+    let swipeTexts = [];
+
+    const clampSwipeIdx = (idx, total = swipes.length) => {
+      if (!Number.isFinite(total) || total <= 0) return 0;
+      const n = Number.isFinite(idx) ? Math.trunc(idx) : 0;
+      return Math.min(Math.max(n, 0), total - 1);
+    };
+
+    const syncSwipesFromChat = () => {
+      const ctx = window.SillyTavern?.getContext?.();
+      const stMsg = ctx?.chat?.[mesId];
+
+      if (Array.isArray(stMsg?.swipes)) {
+        swipes = stMsg.swipes;
+        message.swipes = stMsg.swipes;
+      } else {
+        swipes = Array.isArray(message?.swipes) ? message.swipes : [];
+      }
+
+      const rawCurrent = Number.isInteger(stMsg?.swipe_id)
+        ? stMsg.swipe_id
+        : (Number.isInteger(message?.swipeId) ? message.swipeId : 0);
+      currentSwipeId = clampSwipeIdx(rawCurrent, swipes.length);
+      message.swipeId = currentSwipeId;
+
+      currentViewIdx = clampSwipeIdx(currentViewIdx, swipes.length);
+      swipeTextsRaw = swipes.map(getSwipeText);
+      swipeTexts = swipeTextsRaw;
+    };
+
+    const contentEl = modalOverlay.querySelector(`#${modalId}-content`);
+    const jumpListEl = modalOverlay.querySelector(`#${modalId}-jump-list`);
+    const titleEl = modalOverlay.querySelector('.st-swipe-title');
 
     // 可选：应用酒馆正则（global + scoped + preset）
     async function importRegexEngine() {
@@ -353,34 +385,53 @@
       }
     };
 
-    // 初次打开预览：按当前设置决定是否应用正则
-    await recomputeSwipeTexts();
+    const renderTitle = () => {
+      if (!titleEl) return;
+      titleEl.textContent = `消息 #${mesId} (${swipes.length} 分支)`;
+    };
 
-    // 渲染 cards
-    const contentEl = modalOverlay.querySelector(`#${modalId}-content`);
-    if (contentEl) {
-      contentEl.innerHTML = swipes.map((_, idx) => `
-        <div class="st-swipe-card ${idx === currentSwipeId ? 'active' : ''}" id="${modalId}-card-${idx}" data-idx="${idx}">
-          <div class="st-swipe-card-header">
-            <div class="st-swipe-card-badge">
-              <span>分支 #${idx + 1} ${idx === currentSwipeId ? '(当前选中)' : ''}</span>
-              <button class="menu_button st-swipe-action-render-one" data-idx="${idx}" title="单独开启/关闭渲染预览">
-                <i class="fa-solid fa-code"></i>
-              </button>
-            </div>
-            <div class="st-swipe-card-actions">
-              <button class="menu_button st-swipe-action-switch" data-idx="${idx}">切换楼层内容</button>
-              <button class="menu_button st-swipe-action-branch" data-idx="${idx}">创建新存档</button>
-            </div>
-          </div>
-
-          <div class="st-swipe-card-body">
-            <div class="st-swipe-card-text" id="${modalId}-text-${idx}"></div>
-            <iframe class="st-swipe-card-frame" id="${modalId}-frame-${idx}" sandbox="allow-scripts" referrerpolicy="no-referrer" loading="lazy"></iframe>
-          </div>
+    const renderJumpList = () => {
+      if (!jumpListEl) return;
+      jumpListEl.innerHTML = swipes.map((_, idx) => `
+        <div class="st-swipe-jump-item ${idx === currentSwipeId ? 'active' : ''}" data-idx="${idx}">
+          ${idx + 1}
         </div>
       `).join('');
-    }
+    };
+
+    const renderCardsMarkup = () => {
+      if (!contentEl) return;
+      if (!swipes.length) {
+        contentEl.innerHTML = '<div class="st-swipe-loading">当前消息没有可展示的分支</div>';
+        return;
+      }
+
+      contentEl.innerHTML = swipes.map((_, idx) => `
+          <div class="st-swipe-card ${idx === currentSwipeId ? 'active' : ''}" id="${modalId}-card-${idx}" data-idx="${idx}">
+            <div class="st-swipe-card-header">
+              <div class="st-swipe-card-badge">
+                <span>分支 #${idx + 1} ${idx === currentSwipeId ? '(当前选中)' : ''}</span>
+                <button class="menu_button st-swipe-action-render-one" data-idx="${idx}" title="单独开启/关闭渲染预览">
+                  <i class="fa-solid fa-code"></i>
+                </button>
+              </div>
+              <div class="st-swipe-card-actions">
+                <button class="menu_button st-swipe-action-switch" data-idx="${idx}">切换楼层内容</button>
+                <button class="menu_button st-swipe-action-branch" data-idx="${idx}">创建新存档</button>
+                <button class="menu_button st-swipe-action-edit" data-idx="${idx}">编辑分支</button>
+                <button class="menu_button st-swipe-action-move-up" data-idx="${idx}" ${idx === 0 ? 'disabled' : ''}>上移</button>
+                <button class="menu_button st-swipe-action-move-down" data-idx="${idx}" ${idx === swipes.length - 1 ? 'disabled' : ''}>下移</button>
+                <button class="menu_button st-swipe-action-delete" data-idx="${idx}" title="删除该分支">删除分支</button>
+              </div>
+            </div>
+
+            <div class="st-swipe-card-body">
+              <div class="st-swipe-card-text" id="${modalId}-text-${idx}"></div>
+              <iframe class="st-swipe-card-frame" id="${modalId}-frame-${idx}" sandbox="allow-scripts" referrerpolicy="no-referrer" loading="lazy"></iframe>
+            </div>
+          </div>
+        `).join('');
+    };
 
     // 渲染逻辑（iframe 预览）
     const escapeHtml = (text) => String(text ?? '').replace(/[&<>"']/g, (m) => ({
@@ -929,15 +980,57 @@
       updateRenderButtonStates();
     };
 
-    renderAllCards();
+    const scrollToIdx = (idx, behavior = 'smooth') => {
+      if (!swipes.length) {
+        currentViewIdx = 0;
+        return;
+      }
 
-    const scrollToIdx = (idx) => {
-      const card = document.getElementById(`${modalId}-card-${idx}`);
+      const targetIdx = clampSwipeIdx(idx, swipes.length);
+      currentViewIdx = targetIdx;
+
+      const card = document.getElementById(`${modalId}-card-${targetIdx}`);
       if (card) {
-        card.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        currentViewIdx = idx;
+        card.scrollIntoView({ behavior, block: 'start' });
       }
     };
+
+    const swapRenderPreviewState = (a, b) => {
+      const hasA = renderPreviewByIdx.has(a);
+      const hasB = renderPreviewByIdx.has(b);
+      const valA = renderPreviewByIdx.get(a);
+      const valB = renderPreviewByIdx.get(b);
+
+      if (hasA) renderPreviewByIdx.set(b, valA);
+      else renderPreviewByIdx.delete(b);
+
+      if (hasB) renderPreviewByIdx.set(a, valB);
+      else renderPreviewByIdx.delete(a);
+    };
+
+    const removeRenderPreviewStateAt = (targetIdx) => {
+      const next = new Map();
+      for (const [idx, value] of renderPreviewByIdx.entries()) {
+        if (idx < targetIdx) next.set(idx, value);
+        else if (idx > targetIdx) next.set(idx - 1, value);
+      }
+      renderPreviewByIdx.clear();
+      for (const [idx, value] of next.entries()) {
+        renderPreviewByIdx.set(idx, value);
+      }
+    };
+
+    async function refreshModalList(opts = {}) {
+      const { focusIdx = currentViewIdx, keepScroll = true } = opts;
+      syncSwipesFromChat();
+      await recomputeSwipeTexts();
+      renderTitle();
+      renderJumpList();
+      renderCardsMarkup();
+      bindDynamicEvents();
+      renderAllCards();
+      if (keepScroll) scrollToIdx(focusIdx, 'auto');
+    }
 
     // 对外操作：将分支应用到聊天中
     const applySwipeToChat = async (targetSwipeIdx) => {
@@ -946,7 +1039,7 @@
       const stMsg = chat?.[mesId];
 
       if (!stMsg) throw new Error(`找不到 chat[${mesId}]`);
-      if (!Array.isArray(stMsg.swipes) || !stMsg.swipes[targetSwipeIdx]) {
+      if (!Array.isArray(stMsg.swipes) || targetSwipeIdx < 0 || targetSwipeIdx >= stMsg.swipes.length) {
         throw new Error('目标分支不存在');
       }
 
@@ -984,6 +1077,9 @@
       if (typeof ctx?.saveChat === 'function') {
         await ctx.saveChat();
       }
+
+      message.swipes = stMsg.swipes;
+      message.swipeId = targetSwipeIdx;
     };
 
     const jumpToSwipe = async (targetSwipeIdx) => {
@@ -1012,71 +1108,315 @@
       closeModal();
     };
 
-    // 绑定导航事件
-    modalOverlay.querySelectorAll('.st-swipe-jump-item').forEach(el => {
-      el.addEventListener('click', () => {
-        const idx = parseInt(el.getAttribute('data-idx') || '0', 10);
-        scrollToIdx(idx);
-      });
-    });
+    const swapArrayItem = (arr, a, b) => {
+      const t = arr[a];
+      arr[a] = arr[b];
+      arr[b] = t;
+    };
 
-    modalOverlay.querySelectorAll('.st-swipe-action-switch').forEach(el => {
-      el.addEventListener('click', async (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const idx = parseInt(el.getAttribute('data-idx') || '0', 10);
-        try {
-          await jumpToSwipe(idx);
-        } catch (err) {
-          console.error('[Swipe Previewer] switch floor content failed', err);
-          window.toastr?.error?.('切换楼层内容失败');
+    const moveSwipeOrder = async (fromIdx, toIdx) => {
+      const ctx = window.SillyTavern?.getContext?.();
+      const chat = ctx?.chat;
+      const stMsg = chat?.[mesId];
+
+      if (!stMsg) throw new Error(`找不到 chat[${mesId}]`);
+      if (!Array.isArray(stMsg.swipes)) throw new Error('当前消息没有分支数据');
+      if (fromIdx === toIdx) return;
+
+      const maxIdx = stMsg.swipes.length - 1;
+      if (fromIdx < 0 || toIdx < 0 || fromIdx > maxIdx || toIdx > maxIdx) {
+        throw new Error('目标分支下标越界');
+      }
+      swapRenderPreviewState(fromIdx, toIdx);
+
+      swapArrayItem(stMsg.swipes, fromIdx, toIdx);
+      if (Array.isArray(stMsg.swipe_info) && stMsg.swipe_info.length > Math.max(fromIdx, toIdx)) {
+        swapArrayItem(stMsg.swipe_info, fromIdx, toIdx);
+      }
+
+      const current = Number.isInteger(stMsg.swipe_id) ? stMsg.swipe_id : 0;
+      let nextCurrent = current;
+      if (current === fromIdx) nextCurrent = toIdx;
+      else if (current === toIdx) nextCurrent = fromIdx;
+
+      nextCurrent = Math.min(Math.max(nextCurrent, 0), stMsg.swipes.length - 1);
+      await applySwipeToChat(nextCurrent);
+    };
+
+    const deleteSwipe = async (targetSwipeIdx) => {
+      const shouldDelete = typeof window.confirm === 'function'
+        ? window.confirm(`确定要删除分支 #${targetSwipeIdx + 1} 吗？\n此操作会直接修改当前聊天记录。`)
+        : true;
+      if (!shouldDelete) return false;
+
+      const ctx = window.SillyTavern?.getContext?.();
+      const chat = ctx?.chat;
+      const stMsg = chat?.[mesId];
+
+      if (!stMsg) throw new Error(`找不到 chat[${mesId}]`);
+      if (!Array.isArray(stMsg.swipes) || stMsg.swipes.length <= 1) {
+        throw new Error('至少需要保留一个分支');
+      }
+      if (targetSwipeIdx < 0 || targetSwipeIdx >= stMsg.swipes.length) {
+        throw new Error('目标分支不存在');
+      }
+      removeRenderPreviewStateAt(targetSwipeIdx);
+
+      stMsg.swipes.splice(targetSwipeIdx, 1);
+      if (Array.isArray(stMsg.swipe_info) && stMsg.swipe_info.length > targetSwipeIdx) {
+        stMsg.swipe_info.splice(targetSwipeIdx, 1);
+      }
+
+      const current = Number.isInteger(stMsg.swipe_id) ? stMsg.swipe_id : 0;
+      const nextCurrent = Math.min(Math.max(targetSwipeIdx < current ? current - 1 : current, 0), stMsg.swipes.length - 1);
+      await applySwipeToChat(nextCurrent);
+      return true;
+    };
+
+    const showEditSwipeModal = ({ idx, initialText }) => {
+      return new Promise((resolve) => {
+        const editModalId = `${modalId}-edit-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+        const editOverlay = document.createElement('div');
+        editOverlay.id = editModalId;
+        editOverlay.className = 'st-swipe-modal-overlay';
+        editOverlay.innerHTML = `
+          <div class="st-swipe-modal-container" style="max-width: 820px; width: min(95vw, 820px); height: auto; max-height: 90vh;">
+            <div class="st-swipe-modal-header">
+              <div class="st-swipe-modal-header-top">
+                <span class="st-swipe-title">编辑分支 #${idx + 1}</span>
+                <div class="st-swipe-header-ops">
+                  <div id="${editModalId}-close" class="menu_button fa-solid fa-xmark" title="关闭"></div>
+                </div>
+              </div>
+            </div>
+            <div class="st-swipe-modal-content" style="padding-top: 14px;">
+              <textarea id="${editModalId}-textarea" class="st-swipe-edit-textarea" spellcheck="false"></textarea>
+              <div class="st-swipe-edit-actions">
+                <button id="${editModalId}-cancel" class="menu_button">取消</button>
+                <button id="${editModalId}-save" class="menu_button st-swipe-edit-save">保存</button>
+              </div>
+              <div class="st-swipe-setting-card-desc">提示：支持多行编辑，可使用 Ctrl/⌘ + Enter 快速保存。</div>
+            </div>
+          </div>
+        `;
+
+        document.body.appendChild(editOverlay);
+
+        const textarea = editOverlay.querySelector(`#${editModalId}-textarea`);
+        if (textarea) {
+          textarea.value = String(initialText ?? '');
+          textarea.focus();
+          const len = textarea.value.length;
+          textarea.setSelectionRange(len, len);
         }
-      });
-    });
 
-    modalOverlay.querySelectorAll('.st-swipe-action-branch').forEach(el => {
-      el.addEventListener('click', async (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const idx = parseInt(el.getAttribute('data-idx') || '0', 10);
-        try {
-          await createBranchFromSwipe(idx);
-        } catch (err) {
-          console.error('[Swipe Previewer] create branch failed', err);
-          window.toastr?.error?.('创建新存档失败');
+        let closed = false;
+        const done = (value) => {
+          if (closed) return;
+          closed = true;
+          editOverlay.remove();
+          window.removeEventListener('keydown', onKeydown, true);
+          resolve(value);
+        };
+
+        const onKeydown = (e) => {
+          if (!document.getElementById(editModalId)) return;
+          if (e.key === 'Escape') {
+            e.preventDefault();
+            done(null);
+            return;
+          }
+
+          const isSaveHotkey = (e.key === 'Enter') && (e.ctrlKey || e.metaKey);
+          if (isSaveHotkey) {
+            e.preventDefault();
+            done(textarea?.value ?? '');
+          }
+        };
+        window.addEventListener('keydown', onKeydown, true);
+
+        editOverlay.querySelector(`#${editModalId}-close`)?.addEventListener('click', () => done(null));
+        editOverlay.querySelector(`#${editModalId}-cancel`)?.addEventListener('click', () => done(null));
+        editOverlay.querySelector(`#${editModalId}-save`)?.addEventListener('click', () => done(textarea?.value ?? ''));
+        editOverlay.addEventListener('click', (e) => {
+          if (e.target === editOverlay) done(null);
+        });
+      });
+    };
+
+    const editSwipe = async (targetSwipeIdx) => {
+      const ctx = window.SillyTavern?.getContext?.();
+      const chat = ctx?.chat;
+      const stMsg = chat?.[mesId];
+
+      if (!stMsg) throw new Error(`找不到 chat[${mesId}]`);
+      if (!Array.isArray(stMsg.swipes) || targetSwipeIdx < 0 || targetSwipeIdx >= stMsg.swipes.length) {
+        throw new Error('目标分支不存在');
+      }
+
+      const oldText = String(stMsg.swipes[targetSwipeIdx] ?? '');
+      const editedText = await showEditSwipeModal({ idx: targetSwipeIdx, initialText: oldText });
+      if (editedText === null) return false;
+      if (editedText === oldText) return false;
+
+      stMsg.swipes[targetSwipeIdx] = editedText;
+
+      const current = Number.isInteger(stMsg.swipe_id) ? stMsg.swipe_id : 0;
+      if (current === targetSwipeIdx) {
+        await applySwipeToChat(targetSwipeIdx);
+      } else {
+        if (typeof ctx?.saveChat === 'function') {
+          await ctx.saveChat();
         }
-      });
-    });
+        message.swipes = stMsg.swipes;
+      }
 
-    // 卡片点击：仅用于便捷滚动定位
-    modalOverlay.querySelectorAll('.st-swipe-card').forEach(el => {
-      el.addEventListener('click', () => {
-        const idx = parseInt(el.getAttribute('data-idx') || '0', 10);
-        currentViewIdx = idx;
+      return true;
+    };
+
+    function bindDynamicEvents() {
+      modalOverlay.querySelectorAll('.st-swipe-jump-item').forEach(el => {
+        el.addEventListener('click', () => {
+          const idx = parseInt(el.getAttribute('data-idx') || '0', 10);
+          scrollToIdx(idx);
+        });
       });
-    });
+
+      modalOverlay.querySelectorAll('.st-swipe-action-switch').forEach(el => {
+        el.addEventListener('click', async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const idx = parseInt(el.getAttribute('data-idx') || '0', 10);
+          try {
+            await jumpToSwipe(idx);
+          } catch (err) {
+            console.error('[Swipe Previewer] switch floor content failed', err);
+            window.toastr?.error?.('切换楼层内容失败');
+          }
+        });
+      });
+
+      modalOverlay.querySelectorAll('.st-swipe-action-branch').forEach(el => {
+        el.addEventListener('click', async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const idx = parseInt(el.getAttribute('data-idx') || '0', 10);
+          try {
+            await createBranchFromSwipe(idx);
+          } catch (err) {
+            console.error('[Swipe Previewer] create branch failed', err);
+            window.toastr?.error?.('创建新存档失败');
+          }
+        });
+      });
+
+      modalOverlay.querySelectorAll('.st-swipe-action-edit').forEach(el => {
+        el.addEventListener('click', async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+
+          const idx = parseInt(el.getAttribute('data-idx') || '0', 10);
+          try {
+            const changed = await editSwipe(idx);
+            if (!changed) return;
+            await refreshModalList({ focusIdx: idx });
+            window.toastr?.success?.('分支内容已更新');
+          } catch (err) {
+            console.error('[Swipe Previewer] edit swipe failed', err);
+            window.toastr?.error?.('编辑分支失败');
+          }
+        });
+      });
+
+      modalOverlay.querySelectorAll('.st-swipe-action-move-up').forEach(el => {
+        el.addEventListener('click', async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (el.hasAttribute('disabled')) return;
+
+          const idx = parseInt(el.getAttribute('data-idx') || '0', 10);
+          if (idx <= 0) return;
+
+          try {
+            await moveSwipeOrder(idx, idx - 1);
+            await refreshModalList({ focusIdx: idx - 1 });
+          } catch (err) {
+            console.error('[Swipe Previewer] move swipe up failed', err);
+            window.toastr?.error?.('上移分支失败');
+          }
+        });
+      });
+
+      modalOverlay.querySelectorAll('.st-swipe-action-move-down').forEach(el => {
+        el.addEventListener('click', async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (el.hasAttribute('disabled')) return;
+
+          const idx = parseInt(el.getAttribute('data-idx') || '0', 10);
+          if (idx >= swipes.length - 1) return;
+
+          try {
+            await moveSwipeOrder(idx, idx + 1);
+            await refreshModalList({ focusIdx: idx + 1 });
+          } catch (err) {
+            console.error('[Swipe Previewer] move swipe down failed', err);
+            window.toastr?.error?.('下移分支失败');
+          }
+        });
+      });
+
+      modalOverlay.querySelectorAll('.st-swipe-action-delete').forEach(el => {
+        el.addEventListener('click', async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+
+          const idx = parseInt(el.getAttribute('data-idx') || '0', 10);
+          try {
+            const deleted = await deleteSwipe(idx);
+            if (!deleted) return;
+            await refreshModalList({ focusIdx: idx });
+          } catch (err) {
+            console.error('[Swipe Previewer] delete swipe failed', err);
+            window.toastr?.error?.('删除分支失败');
+          }
+        });
+      });
+
+      // 卡片点击：仅用于便捷滚动定位
+      modalOverlay.querySelectorAll('.st-swipe-card').forEach(el => {
+        el.addEventListener('click', () => {
+          const idx = parseInt(el.getAttribute('data-idx') || '0', 10);
+          currentViewIdx = idx;
+        });
+      });
+
+      // 单卡：渲染预览开关（覆盖全局）
+      modalOverlay.querySelectorAll('.st-swipe-action-render-one').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const idx = parseInt(btn.getAttribute('data-idx') || '0', 10);
+          const current = renderPreviewByIdx.has(idx) ? !!renderPreviewByIdx.get(idx) : getEffectiveRender(idx);
+          renderPreviewByIdx.set(idx, !current);
+          renderCard(idx);
+          updateRenderButtonStates();
+        });
+      });
+    }
+
+    // 初次打开预览：按当前设置决定是否应用正则，并渲染列表
+    await refreshModalList({ keepScroll: false });
 
     modalOverlay.querySelector(`#${modalId}-prev`)?.addEventListener('click', () => scrollToIdx(Math.max(0, currentViewIdx - 1)));
-    modalOverlay.querySelector(`#${modalId}-next`)?.addEventListener('click', () => scrollToIdx(Math.min(swipes.length - 1, currentViewIdx + 1)));
+    modalOverlay.querySelector(`#${modalId}-next`)?.addEventListener('click', () => scrollToIdx(Math.min(Math.max(swipes.length - 1, 0), currentViewIdx + 1)));
     modalOverlay.querySelector(`#${modalId}-toggle`)?.addEventListener('click', () => modalOverlay.querySelector(`#${modalId}-jump-list`)?.classList.toggle('hidden'));
 
     // 右上角：渲染预览（全局开关）
     modalOverlay.querySelector(`#${modalId}-render`)?.addEventListener('click', () => {
       renderPreviewGlobal = !renderPreviewGlobal;
       renderAllCards();
-    });
-
-    // 单卡：渲染预览开关（覆盖全局）
-    modalOverlay.querySelectorAll('.st-swipe-action-render-one').forEach((btn) => {
-      btn.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const idx = parseInt(btn.getAttribute('data-idx') || '0', 10);
-        const current = renderPreviewByIdx.has(idx) ? !!renderPreviewByIdx.get(idx) : getEffectiveRender(idx);
-        renderPreviewByIdx.set(idx, !current);
-        renderCard(idx);
-        updateRenderButtonStates();
-      });
     });
 
     // 右上角：设置按钮
