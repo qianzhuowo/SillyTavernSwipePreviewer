@@ -989,10 +989,24 @@
       const targetIdx = clampSwipeIdx(idx, swipes.length);
       currentViewIdx = targetIdx;
 
-      const card = document.getElementById(`${modalId}-card-${targetIdx}`);
-      if (card) {
-        card.scrollIntoView({ behavior, block: 'start' });
+      // NOTE(mobile): 直接对卡片做 scrollIntoView 在部分移动端浏览器中会“联动滚动”到页面底层的聊天区域，
+      // 导致背景页面被意外滚动甚至回不去。这里强制只滚动模态框内部的内容容器。
+      const card = modalOverlay.querySelector(`#${modalId}-card-${targetIdx}`);
+      if (!card) return;
+
+      if (contentEl && typeof contentEl.scrollTo === 'function') {
+        const contentRect = contentEl.getBoundingClientRect();
+        const cardRect = card.getBoundingClientRect();
+        const deltaTop = cardRect.top - contentRect.top;
+
+        // 让卡片顶部稍微留出一点空间（避免贴边）
+        const nextTop = Math.max(0, contentEl.scrollTop + deltaTop - 8);
+        contentEl.scrollTo({ top: nextTop, behavior });
+        return;
       }
+
+      // 兜底：仅当没有内容容器时才使用 scrollIntoView
+      card.scrollIntoView({ behavior, block: 'start' });
     };
 
     const swapRenderPreviewState = (a, b) => {
@@ -1277,7 +1291,10 @@
 
     function bindDynamicEvents() {
       modalOverlay.querySelectorAll('.st-swipe-jump-item').forEach(el => {
-        el.addEventListener('click', () => {
+        el.addEventListener('click', (e) => {
+          // 防止移动端出现点击触发背景滚动/点击穿透等问题
+          e.preventDefault();
+          e.stopPropagation();
           const idx = parseInt(el.getAttribute('data-idx') || '0', 10);
           scrollToIdx(idx);
         });
