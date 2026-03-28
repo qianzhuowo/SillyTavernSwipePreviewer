@@ -1,7 +1,7 @@
 {
   "name": "swipe-previewer",
   "display_name": "分支预览器 (Swipe Previewer)",
-  "version": "1.3.1",
+  "version": "1.3.2",
   "author": "Qianzhuo",
   "description": "允许预览历史消息的所有生成分支 (Swipes)，支持导航跳转与创建分支存档。",
   "js": "index.js",

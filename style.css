@@ -510,31 +510,66 @@
 @media (max-width: 600px) {
   .st-swipe-modal-container {
     width: 95%;
-    height: 90%;
-    max-height: 90vh;
+    height: 95%;
+    max-height: 95vh;
     border-radius: 8px;
   }
 
   .st-swipe-title {
-    font-size: 0.9em;
+    font-size: 0.95em;
   }
 
   .st-swipe-modal-header-top {
-    padding: 8px 12px;
+    padding: 10px 12px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .st-swipe-header-ops {
+    width: 100%;
+    justify-content: flex-end;
+    gap: 4px;
   }
 
   .st-swipe-modal-content {
-    padding: 12px;
+    padding: 10px;
+    gap: 12px;
   }
 
   .st-swipe-card {
-    padding: 12px;
+    padding: 10px;
+  }
+
+  .st-swipe-card-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .st-swipe-card-badge {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .st-swipe-card-actions {
+    width: 100%;
+    gap: 4px;
+  }
+
+  .st-swipe-card-actions .menu_button {
+    flex: 1 1 auto;
+    padding: 6px 4px;
+    font-size: 0.82em;
+    text-align: center;
+    justify-content: center;
+    min-width: calc(50% - 4px);
   }
 
   .st-swipe-header-ops .menu_button {
-    width: 28px;
-    height: 28px;
-    font-size: 0.75em;
+    width: 30px;
+    height: 30px;
+    font-size: 0.8em;
     padding: 4px !important;
   }
 
@@ -544,8 +579,17 @@
   }
 
   .st-swipe-jump-item {
-    width: 26px;
-    height: 26px;
-    font-size: 0.7em;
+    width: 28px;
+    height: 28px;
+    font-size: 0.75em;
+  }
+
+  /* 针对编辑界面的按钮适配 */
+  .st-swipe-edit-actions {
+    justify-content: space-between;
+    width: 100%;
+  }
+  .st-swipe-edit-actions button {
+    flex: 1;
   }
 }

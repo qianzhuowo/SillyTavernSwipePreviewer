@@ -120,7 +120,7 @@
     overlay.className = 'st-swipe-modal-overlay';
 
     overlay.innerHTML = `
-      <div class="st-swipe-modal-container" style="max-width: 700px; height: auto; max-height: 85vh;">
+      <div class="st-swipe-modal-container" style="max-width: 700px; width: min(95vw, 700px); height: auto; max-height: 85vh;">
         <div class="st-swipe-modal-header">
           <div class="st-swipe-modal-header-top">
             <span class="st-swipe-title">分支预览器设置</span>
