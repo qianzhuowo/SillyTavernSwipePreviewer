@@ -76,6 +76,19 @@ export function showBranchTree({ onPreview, onClose, focusMesId, focusSwipeIdx }
     const headerTop = element('div', 'st-swipe-modal-header-top');
     const title = element('span', 'st-swipe-title', '分支时间线');
     title.id = `${MODAL_ID}-title`;
+    const titleGroup = element('div', 'st-swipe-timeline-title-group');
+    const helpToggle = iconButton('st-swipe-timeline-help-toggle', 'fa-circle-exclamation', '图例与操作说明');
+    helpToggle.removeAttribute('title'); // Avoid a second, browser-native tooltip.
+    const helpPanel = element('div', 'st-swipe-timeline-help-panel');
+    helpPanel.id = `${MODAL_ID}-help`;
+    helpPanel.hidden = true;
+    helpPanel.tabIndex = 0; // Allow keyboard scrolling when the viewport is very short.
+    helpPanel.setAttribute('role', 'note');
+    helpPanel.setAttribute('aria-label', '时间线图例与操作说明');
+    helpToggle.setAttribute('aria-controls', helpPanel.id);
+    helpToggle.setAttribute('aria-describedby', helpPanel.id);
+    helpToggle.setAttribute('aria-expanded', 'false');
+    titleGroup.append(title, helpToggle);
     const operations = element('div', 'st-swipe-header-ops');
     const refreshButton = button('st-swipe-tree-refresh', '刷新');
     const closeButton = button('st-swipe-tree-close', '关闭');
@@ -84,7 +97,7 @@ export function showBranchTree({ onPreview, onClose, focusMesId, focusSwipeIdx }
     roleLegend.append(element('span', 'st-swipe-timeline-legend-char', '● char 楼层'),
         element('span', 'st-swipe-timeline-legend-user', '● user 楼层'),
         element('span', '', '● 系统楼层'));
-    headerTop.append(title, roleLegend, operations);
+    headerTop.append(titleGroup, roleLegend, operations);
     const stats = element('div', 'st-swipe-tree-stats st-swipe-timeline-stats');
     const legend = element('div', 'st-swipe-timeline-legend');
     const pathLegend = element('strong', 'st-swipe-timeline-path-label', '实线箭头：当前选择路径');
@@ -163,7 +176,8 @@ export function showBranchTree({ onPreview, onClose, focusMesId, focusSwipeIdx }
     locationStatus.setAttribute('role', 'status');
     const statusRow = element('div', 'st-swipe-timeline-status-row');
     statusRow.append(status, searchToggle);
-    header.append(headerTop, stats, summaryShell, legend, hint, statusRow, toolbar, locationStatus);
+    helpPanel.append(legend, hint);
+    header.append(headerTop, stats, summaryShell, statusRow, toolbar, locationStatus);
     const content = element('div', 'st-swipe-modal-content st-swipe-tree-content st-swipe-timeline-content');
     const viewport = element('div', 'st-swipe-timeline-viewport');
     viewport.tabIndex = 0;
@@ -199,7 +213,8 @@ export function showBranchTree({ onPreview, onClose, focusMesId, focusSwipeIdx }
     canvas.append(viewport, tools);
     content.append(canvas, detail);
     container.append(header, content);
-    overlay.append(container);
+    // The help floats outside the scroll-clipped header/container, but within the focus scope.
+    overlay.append(container, helpPanel);
     prepareOverlayKeyboard(overlay);
     document.body.append(overlay);
 
@@ -240,6 +255,68 @@ export function showBranchTree({ onPreview, onClose, focusMesId, focusSwipeIdx }
     let observer;
     let resizeObserver;
     let resizeFrame = 0;
+    let helpPinned = false;
+    let helpHideTimer = 0;
+
+    function hideHelp() {
+        const restoreFocus = helpPanel.contains(document.activeElement);
+        clearTimeout(helpHideTimer);
+        helpHideTimer = 0;
+        helpPinned = false;
+        helpPanel.hidden = true;
+        helpToggle.setAttribute('aria-expanded', 'false');
+        if (!closed && restoreFocus) helpToggle.focus({ preventScroll: true });
+    }
+    function positionHelp() {
+        if (helpPanel.hidden || closed) return;
+        const anchor = helpToggle.getBoundingClientRect();
+        const root = overlay.getBoundingClientRect();
+        const box = helpPanel.getBoundingClientRect();
+        const width = document.documentElement.clientWidth;
+        const height = document.documentElement.clientHeight;
+        const margin = 12, gap = 8;
+        const left = Math.max(margin, Math.min(anchor.left, width - box.width - margin));
+        const below = anchor.bottom + gap;
+        const above = anchor.top - gap - box.height;
+        const top = below + box.height <= height - margin ? below
+            : above >= margin ? above : Math.max(margin, height - box.height - margin);
+        helpPanel.style.left = `${left - root.left}px`;
+        helpPanel.style.top = `${top - root.top}px`;
+    }
+    function showHelp() {
+        if (closed || !isTopSwipeOverlay(overlay)) return;
+        clearTimeout(helpHideTimer);
+        helpPanel.hidden = false;
+        helpToggle.setAttribute('aria-expanded', 'true');
+        positionHelp();
+    }
+    function scheduleHelpHide() {
+        clearTimeout(helpHideTimer);
+        if (closed || helpPinned) return;
+        // Keep the help readable while the pointer crosses the small anchor/panel gap.
+        helpHideTimer = setTimeout(() => {
+            if (!helpPinned && !helpToggle.matches(':hover') && !helpPanel.matches(':hover')
+                && !helpPanel.contains(document.activeElement)) hideHelp();
+        }, 140);
+    }
+    helpToggle.addEventListener('pointerenter', event => { if (event.pointerType === 'mouse') showHelp(); });
+    helpToggle.addEventListener('pointerleave', scheduleHelpHide);
+    helpPanel.addEventListener('pointerenter', () => clearTimeout(helpHideTimer));
+    helpPanel.addEventListener('pointerleave', scheduleHelpHide);
+    helpPanel.addEventListener('focusout', scheduleHelpHide);
+    helpToggle.addEventListener('click', () => {
+        if (!isTopSwipeOverlay(overlay)) return;
+        if (helpPinned) hideHelp();
+        else { helpPinned = true; showHelp(); }
+    });
+    overlay.addEventListener('click', event => {
+        if (helpPanel.hidden || !isTopSwipeOverlay(overlay)
+            || helpPanel.contains(event.target) || helpToggle.contains(event.target)) return;
+        hideHelp();
+        // A backdrop click dismisses the small help first, not the whole tree as well.
+        if (event.target === overlay) { event.preventDefault(); event.stopPropagation(); }
+    }, true);
+    header.addEventListener('scroll', hideHelp, { passive: true });
 
     function pause() {
         return new Promise(resolve => {
@@ -250,6 +327,7 @@ export function showBranchTree({ onPreview, onClose, focusMesId, focusSwipeIdx }
     function close(reason = 'dismiss') {
         if (closed) return;
         closed = true;
+        hideHelp();
         revision++;
         searchRevision++;
         searchIndex?.cancel();
@@ -521,7 +599,7 @@ export function showBranchTree({ onPreview, onClose, focusMesId, focusSwipeIdx }
             if (closed) return;
             if (pendingZoom !== null) { const zoom = pendingZoom; pendingZoom = null; applyZoom(zoom); }
             if (needsResize) { needsResize = false; resizeStage(true); }
-            renderWindow(); renderSummaryWindow(); syncSummaryScroll();
+            renderWindow(); renderSummaryWindow(); syncSummaryScroll(); positionHelp();
         });
     }
     async function renderGraph(token, center = true, changedFloors = null) {
@@ -693,6 +771,7 @@ export function showBranchTree({ onPreview, onClose, focusMesId, focusSwipeIdx }
         matches = []; matchIds.clear(); matchIndex = -1; updateMatchCount(); detail.hidden = true;
         status.textContent = chatChanged ? '聊天已切换，正在刷新…' : '楼层结构已变化，正在刷新…';
         if (chatChanged) {
+            hideHelp();
             search.value = ''; nodeElements.clear(); edgeElements.clear(); gapElements.clear(); summaryElements.clear();
             nodes.replaceChildren(); edges.replaceChildren(); summaryTrack.replaceChildren(); stats.textContent = '';
         }
@@ -867,7 +946,8 @@ export function showBranchTree({ onPreview, onClose, focusMesId, focusSwipeIdx }
         resizeObserver.observe(canvas);
     }
     const releaseFocus = manageOverlayFocus(overlay, {
-        initialFocus: closeButton, returnFocus: previousFocus, onEscape: () => close(),
+        initialFocus: closeButton, returnFocus: previousFocus,
+        onEscape: () => { if (!helpPanel.hidden) hideHelp(); else close(); },
         canRestore: () => {
             try { const context = getContext(); return context.chat === originChat && identity(context) === originKey; }
             catch { return false; }

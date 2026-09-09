@@ -21,7 +21,57 @@
 }
 
 #st-swipe-tree-modal .st-swipe-modal-header-top { padding: 10px 0 4px; flex-wrap: wrap; gap: 6px 12px; }
-#st-swipe-tree-modal .st-swipe-modal-header-top .st-swipe-title { flex: 0 0 auto; }
+#st-swipe-tree-modal .st-swipe-modal-header-top .st-swipe-title { flex: 0 1 auto; }
+#st-swipe-tree-modal .st-swipe-timeline-title-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: 100%;
+}
+#st-swipe-tree-modal .st-swipe-timeline-help-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 28px;
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--st-swipe-muted);
+}
+#st-swipe-tree-modal .st-swipe-timeline-help-toggle:is(:hover, [aria-expanded="true"]) {
+  color: var(--st-swipe-text);
+  background: var(--st-swipe-hover);
+}
+/* Outside the clipped header, but still within the tree's modal/focus scope. */
+#st-swipe-tree-modal .st-swipe-timeline-help-panel {
+  position: absolute;
+  z-index: 20;
+  width: min(380px, calc(100vw - 24px));
+  max-height: calc(100vh - 24px);
+  max-height: calc(100dvh - 24px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--st-swipe-border);
+  border-radius: 10px;
+  background: var(--st-swipe-surface);
+  color: var(--st-swipe-text);
+  box-shadow: 0 4px 16px var(--st-swipe-shadow);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+#st-swipe-tree-modal .st-swipe-timeline-help-panel[hidden] { display: none; }
+#st-swipe-tree-modal .st-swipe-timeline-help-panel .st-swipe-timeline-legend { flex-direction: column; gap: 8px; }
 #st-swipe-tree-modal .st-swipe-modal-header-top .st-swipe-header-ops { flex: 0 0 auto; margin-inline-start: auto; }
 #st-swipe-tree-modal .st-swipe-timeline-role-legend {
   display: flex;

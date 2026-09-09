@@ -57,7 +57,7 @@ export async function runTimelineUiCases() {
         assertZoomHeading();
         const header = $('.st-swipe-timeline-header'), title = header.querySelector('.st-swipe-title');
         equal(title.textContent, '分支时间线', 'compact title');
-        const top = title.parentElement;
+        const top = title.closest('.st-swipe-modal-header-top');
         assert(top.contains($('.st-swipe-timeline-role-legend')) && top.contains($('.st-swipe-tree-refresh')) && top.contains($('.st-swipe-tree-close')), 'title role legend refresh close share top row');
         const status = $('.st-swipe-timeline-status-row'), searchToggle = $('.st-swipe-timeline-search-toggle');
         assert(status.children.length === 2 && status.children[0] === $('.st-swipe-tree-status') && status.children[1] === searchToggle, 'search follows status text');

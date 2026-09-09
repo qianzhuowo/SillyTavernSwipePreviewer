@@ -17,6 +17,7 @@ import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { runKeyboardBrowserCases } from './keyboard-browser-cases.mjs';
+import { runHelpBrowserCases } from './help-browser-cases.mjs';
 
 const selectionOnly = process.argv.includes('--selection-only');
 const performanceMode = process.argv.includes('--performance');
@@ -345,6 +346,7 @@ try {
         results.push(...await evaluate(`import('/tests/tree-preferences-browser-cases.mjs').then(module => module.runTreePreferenceCases())`));
     }
     results.push(...await runKeyboardBrowserCases({ evaluate, send, sessionId, selectionOnly }));
+    if (!selectionOnly) results.push(...await runHelpBrowserCases({ evaluate, send, sessionId, screenshot }));
     if (artifacts) await writeFile(join(artifacts, 'results.json'), JSON.stringify({ snapshots, results, unexpectedRequests }, null, 2));
     for (const result of results) console.log(`${result.status === 'passed' ? 'PASS' : 'FAIL'} ${result.name}${result.error ? '\n  ' + result.error : ''}`);
     console.log(`RESULT ${results.filter(result => result.status === 'passed').length}/${results.length} passed`);
