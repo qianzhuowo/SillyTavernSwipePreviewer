@@ -1,0 +1,34 @@
+# Downloaded dependencies and local package caches (keep manifests and lockfiles).
+node_modules/
+.npm/
+.pnpm-store/
+
+# Local Python tooling, virtual environments and caches.
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Generated browser screenshots, raw results and local reports.
+# Keep tests/*.mjs and tests/README.md; do not blanket-ignore PNG/JSON assets.
+/tests/artifacts/
+/tests/performance-results*/
+/tests/final-*/
+/tests/screenshots/
+
+# Test/tool caches and generated coverage reports.
+.cache/
+coverage/
+.nyc_output/
+playwright-report/
+blob-report/
+test-results/
+
+# Local logs and operating-system metadata.
+*.log
+.DS_Store
+Thumbs.db
+desktop.ini

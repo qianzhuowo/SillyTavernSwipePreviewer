@@ -1,0 +1,445 @@
+/* Current-chat timeline. Scoped so custom themes and the preview stay independent. */
+#st-swipe-tree-modal {
+  --st-swipe-char-color: #8b9dff;
+  --st-swipe-user-color: #e7ad62;
+}
+#st-swipe-tree-modal .st-swipe-timeline-legend-char { color: var(--st-swipe-char-color); }
+#st-swipe-tree-modal .st-swipe-timeline-legend-user { color: var(--st-swipe-user-color); }
+#st-swipe-tree-modal .st-swipe-timeline-container {
+  width: min(96vw, 1440px);
+  max-width: 1440px;
+  height: 92vh;
+  height: 92dvh;
+  max-height: 94dvh;
+}
+
+#st-swipe-tree-modal .st-swipe-timeline-header {
+  max-height: 42%;
+  overflow: auto;
+  padding: 0 12px 8px;
+  gap: 6px;
+}
+
+#st-swipe-tree-modal .st-swipe-modal-header-top { padding: 10px 0 4px; flex-wrap: wrap; gap: 6px 12px; }
+#st-swipe-tree-modal .st-swipe-modal-header-top .st-swipe-title { flex: 0 0 auto; }
+#st-swipe-tree-modal .st-swipe-modal-header-top .st-swipe-header-ops { flex: 0 0 auto; margin-inline-start: auto; }
+#st-swipe-tree-modal .st-swipe-timeline-role-legend {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  font-size: 0.78em;
+  font-weight: normal;
+  color: var(--st-swipe-muted);
+}
+#st-swipe-tree-modal .st-swipe-timeline-role-legend span { white-space: nowrap; }
+#st-swipe-tree-modal .st-swipe-timeline-status-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+#st-swipe-tree-modal .st-swipe-timeline-status-row .st-swipe-tree-status { min-width: 0; }
+#st-swipe-tree-modal .st-swipe-timeline-status:empty { display: none; }
+#st-swipe-tree-modal .st-swipe-timeline-header > * { flex-shrink: 0; }
+#st-swipe-tree-modal .st-swipe-header-ops .menu_button {
+  width: auto;
+  min-width: 40px;
+  height: auto;
+}
+
+#st-swipe-tree-modal .st-swipe-timeline-stats,
+#st-swipe-tree-modal .st-swipe-timeline-legend,
+#st-swipe-tree-modal .st-swipe-timeline-hint,
+#st-swipe-tree-modal .st-swipe-timeline-status {
+  font-size: 0.82em;
+  line-height: 1.45;
+  color: var(--st-swipe-muted);
+  overflow-wrap: anywhere;
+}
+
+#st-swipe-tree-modal .st-swipe-timeline-legend { display: flex; flex-wrap: wrap; gap: 4px 16px; }
+#st-swipe-tree-modal .st-swipe-timeline-path-label { color: var(--st-swipe-accent); }
+#st-swipe-tree-modal .st-swipe-timeline-summary-shell { min-width: 0; width: 100%; flex-shrink: 0; }
+#st-swipe-tree-modal .st-swipe-timeline-path-summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 4px;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  min-height: 36px;
+  padding: 3px 2px;
+  scroll-behavior: auto;
+  overscroll-behavior-x: contain;
+  touch-action: pan-x;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+#st-swipe-tree-modal .st-swipe-timeline-path-summary > * { flex-shrink: 0; }
+/* Virtual track reserves the complete range; only nearby overview chips are mounted. */
+#st-swipe-tree-modal .st-swipe-timeline-summary-track { position: relative; height: 30px; }
+#st-swipe-tree-modal .st-swipe-timeline-summary-track > button {
+  /* 96px chip + 16px gap = branch-tree.js SUMMARY_STEP (112px). */
+  position: absolute; top: 0; width: 96px; max-width: 96px; height: 28px;
+  margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+#st-swipe-tree-modal .st-swipe-timeline-summary-track > button::after {
+  content: '→'; position: absolute; right: 2px; opacity: .45;
+}
+#st-swipe-tree-modal .st-swipe-timeline-path-summary::-webkit-scrollbar { display: none; width: 0; height: 0; }
+/* Hide only native chrome, not scrolling: touch/keyboard and the explicit slider remain usable. */
+#st-swipe-tree-modal .st-swipe-timeline-summary-scroll {
+  display: block;
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  height: 18px;
+  min-height: 18px;
+  margin: 1px 0 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: ew-resize;
+  --st-swipe-summary-track: color-mix(in srgb, var(--st-swipe-text) 12%, transparent);
+  --st-swipe-summary-thumb: color-mix(in srgb, var(--st-swipe-text) 38%, transparent);
+  accent-color: var(--st-swipe-summary-thumb);
+}
+#st-swipe-tree-modal .st-swipe-timeline-summary-scroll:is(:hover, :focus-visible) { --st-swipe-summary-thumb: color-mix(in srgb, var(--st-swipe-text) 55%, transparent); }
+#st-swipe-tree-modal .st-swipe-timeline-summary-scroll::-webkit-slider-runnable-track { height: 3px; border-radius: 2px; background: var(--st-swipe-summary-track); }
+#st-swipe-tree-modal .st-swipe-timeline-summary-scroll::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 32px;
+  height: 7px;
+  margin-top: -2px;
+  border-radius: 4px;
+  background: var(--st-swipe-summary-thumb);
+}
+#st-swipe-tree-modal .st-swipe-timeline-summary-scroll::-moz-range-track { height: 3px; border-radius: 2px; background: var(--st-swipe-summary-track); }
+#st-swipe-tree-modal .st-swipe-timeline-summary-scroll::-moz-range-thumb { width: 32px; height: 7px; border: 0; border-radius: 4px; background: var(--st-swipe-summary-thumb); }
+#st-swipe-tree-modal .st-swipe-timeline-summary-scroll[hidden] { display: none; }
+#st-swipe-tree-modal .st-swipe-timeline-summary-gap { flex: 0 0 auto; width: auto; min-width: 32px; margin: 0; padding: 3px 7px; font-size: 0.85em; }
+#st-swipe-tree-modal .st-swipe-timeline-summary-gap[aria-expanded="true"] { color: var(--st-swipe-accent); }
+#st-swipe-tree-modal .st-swipe-timeline-path-step {
+  flex: 0 0 auto;
+  width: auto;
+  margin: 0;
+  padding: 3px 6px;
+  white-space: nowrap;
+  font-size: 0.85em;
+}
+#st-swipe-tree-modal .st-swipe-timeline-path-multiple {
+  border-color: var(--st-swipe-accent);
+  box-shadow: inset 0 -2px var(--st-swipe-accent);
+  font-weight: bold;
+}
+#st-swipe-tree-modal .st-swipe-timeline-path-separator { color: var(--st-swipe-accent); }
+
+#st-swipe-tree-modal .st-swipe-timeline-toolbar,
+#st-swipe-tree-modal .st-swipe-timeline-controls,
+#st-swipe-tree-modal .st-swipe-timeline-detail-heading,
+#st-swipe-tree-modal .st-swipe-timeline-detail-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+#st-swipe-tree-modal .st-swipe-timeline-toolbar .st-swipe-timeline-search {
+  width: auto;
+  flex: 1 1 230px;
+  min-width: 0;
+  min-height: 32px;
+  padding: 5px 8px;
+}
+#st-swipe-tree-modal .st-swipe-timeline-controls .menu_button,
+#st-swipe-tree-modal .st-swipe-timeline-tools-toggle,
+#st-swipe-tree-modal .st-swipe-timeline-search-toggle,
+#st-swipe-tree-modal .st-swipe-timeline-toolbar .menu_button,
+#st-swipe-tree-modal .st-swipe-timeline-detail .menu_button {
+  width: auto;
+  min-height: 32px;
+  margin: 0;
+  padding: 4px 8px;
+  font-size: 0.9em;
+}
+#st-swipe-tree-modal .st-swipe-timeline-match-count,
+#st-swipe-tree-modal .st-swipe-timeline-zoom-label {
+  white-space: nowrap;
+  font-size: 0.85em;
+  font-variant-numeric: tabular-nums;
+}
+
+#st-swipe-tree-modal .st-swipe-timeline-content {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: row;
+  overflow: hidden;
+  min-height: 0;
+  min-width: 0;
+  padding: 0;
+  gap: 0;
+}
+#st-swipe-tree-modal .st-swipe-timeline-canvas {
+  position: relative;
+  flex: 1 1 0;
+  display: flex;
+  min-width: 0;
+  min-height: 100px;
+  overflow: hidden;
+}
+/* Sibling of the scrolling/scaled stage: toolbar stays in the visible top-left. */
+#st-swipe-tree-modal .st-swipe-timeline-tools {
+  position: absolute;
+  z-index: 3;
+  top: 8px;
+  left: 8px;
+  max-width: calc(100% - 28px);
+  width: max-content;
+  border: 1px solid var(--st-swipe-border);
+  border-radius: 8px;
+  background: var(--st-swipe-surface);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 3px 12px var(--st-swipe-shadow);
+  padding: 6px;
+}
+#st-swipe-tree-modal .st-swipe-timeline-tools-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+#st-swipe-tree-modal .st-swipe-timeline-tools-heading .st-swipe-timeline-zoom-label { margin-inline-start: auto; padding-inline-end: 4px; }
+#st-swipe-tree-modal .st-swipe-timeline-tools .st-swipe-timeline-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: 224px;
+  max-width: 100%;
+  padding-top: 6px;
+  margin-top: 6px;
+  border-top: 1px solid var(--st-swipe-border);
+}
+#st-swipe-tree-modal .st-swipe-timeline-control-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 5px;
+  min-width: 0;
+}
+#st-swipe-tree-modal .st-swipe-timeline-control-row:last-child { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; }
+#st-swipe-tree-modal .st-swipe-timeline-only-branches { white-space: nowrap; }
+#st-swipe-tree-modal .st-swipe-timeline-control-row .menu_button { min-width: 0; padding: 5px; justify-content: center; }
+#st-swipe-tree-modal .st-swipe-timeline-tools-toggle { min-width: 32px; }
+#st-swipe-tree-modal .st-swipe-timeline-tools .st-swipe-timeline-controls[hidden],
+#st-swipe-tree-modal .st-swipe-timeline-toolbar[hidden] { display: none; }
+#st-swipe-tree-modal .st-swipe-timeline-controls [aria-pressed="true"],
+#st-swipe-tree-modal .st-swipe-timeline-tools-toggle[aria-expanded="true"],
+#st-swipe-tree-modal .st-swipe-timeline-search-toggle[aria-expanded="true"] {
+  border-color: var(--st-swipe-accent);
+  background: var(--st-swipe-selected);
+  box-shadow: inset 0 -2px var(--st-swipe-accent);
+}
+#st-swipe-tree-modal .st-swipe-timeline-search-toggle { min-width: 32px; }
+#st-swipe-tree-modal .st-swipe-timeline-gap {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  height: 28px;
+  padding: 4px 10px;
+  line-height: 18px;
+  box-sizing: border-box;
+  border: 1px dashed var(--st-swipe-border);
+  border-radius: 16px;
+  background: var(--st-swipe-surface);
+  color: var(--st-swipe-muted);
+  white-space: nowrap;
+  font-size: 13px;
+  pointer-events: auto;
+}
+#st-swipe-tree-modal .st-swipe-timeline-viewport {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 100px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scroll-behavior: auto;
+  touch-action: pan-x pan-y;
+  cursor: grab;
+  background-color: var(--st-swipe-soft);
+  background-image: radial-gradient(circle, var(--st-swipe-border) 0.7px, transparent 0.9px);
+  background-size: 22px 22px;
+}
+#st-swipe-tree-modal .st-swipe-timeline-panning { cursor: grabbing; user-select: none; }
+#st-swipe-tree-modal .st-swipe-timeline-spacer {
+  position: relative;
+  overflow: hidden;
+}
+#st-swipe-tree-modal .st-swipe-timeline-stage {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+}
+#st-swipe-tree-modal .st-swipe-timeline-edges,
+#st-swipe-tree-modal .st-swipe-timeline-nodes {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+#st-swipe-tree-modal .st-swipe-timeline-edge {
+  fill: none;
+  stroke: var(--st-swipe-accent);
+  stroke-width: 2.5;
+}
+#st-swipe-tree-modal .st-swipe-timeline-edge-candidate {
+  stroke: var(--st-swipe-muted);
+  stroke-width: 1.5;
+  stroke-dasharray: 6 5;
+}
+#st-swipe-tree-modal .st-swipe-timeline-arrow { fill: var(--st-swipe-accent); }
+#st-swipe-tree-modal .st-swipe-timeline-node {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 5px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--st-swipe-border);
+  border-radius: 12px;
+  color: var(--st-swipe-text);
+  --st-swipe-role-color: var(--st-swipe-muted);
+  background: color-mix(in srgb, var(--st-swipe-role-color) 15%, var(--st-swipe-surface));
+  border-color: var(--st-swipe-role-color);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.35;
+  text-align: start;
+  white-space: normal;
+  overflow: hidden;
+  box-shadow: none;
+  pointer-events: auto;
+  cursor: pointer;
+}
+#st-swipe-tree-modal .st-swipe-timeline-node[data-role="char"] { --st-swipe-role-color: var(--st-swipe-char-color); }
+#st-swipe-tree-modal .st-swipe-timeline-node[data-role="user"] { --st-swipe-role-color: var(--st-swipe-user-color); }
+#st-swipe-tree-modal .st-swipe-timeline-node-current {
+  border: 2px solid var(--st-swipe-role-color);
+  box-shadow: inset 4px 0 var(--st-swipe-role-color);
+}
+#st-swipe-tree-modal .st-swipe-timeline-node-candidate { border-style: dashed; }
+#st-swipe-tree-modal .st-swipe-timeline-node:hover { filter: brightness(1.1); }
+#st-swipe-tree-modal .st-swipe-timeline-node-selected { outline: 2px solid var(--st-swipe-text); outline-offset: 3px; }
+#st-swipe-tree-modal .st-swipe-timeline-node-match { box-shadow: 0 0 0 3px var(--st-swipe-accent); }
+#st-swipe-tree-modal .st-swipe-timeline-node-match-active { outline: 3px double var(--st-swipe-text); outline-offset: 4px; }
+#st-swipe-tree-modal .st-swipe-timeline-node-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#st-swipe-tree-modal .st-swipe-timeline-node-role { font-size: 0.85em; color: var(--st-swipe-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#st-swipe-tree-modal .st-swipe-timeline-node-snippet {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  font-size: 0.9em;
+}
+
+#st-swipe-tree-modal .st-swipe-timeline-detail {
+  flex: 0 0 310px;
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  max-width: 40%;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border-inline-start: 1px solid var(--st-swipe-border);
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  background: var(--st-swipe-surface);
+  font-size: 0.9em;
+}
+#st-swipe-tree-modal .st-swipe-timeline-detail-pane {
+  min-width: 0;
+  min-height: 0;
+  padding: 12px;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+#st-swipe-tree-modal .st-swipe-timeline-detail-collapse {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  align-self: stretch;
+  width: auto;
+  height: auto;
+  min-width: 0;
+  min-height: 24px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-inline-end: 1px solid var(--st-swipe-border);
+  border-radius: 0;
+  background: var(--st-swipe-soft);
+  color: var(--st-swipe-muted);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+#st-swipe-tree-modal .st-swipe-timeline-detail-collapse::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-inline-end: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(-45deg);
+}
+#st-swipe-tree-modal .st-swipe-timeline-detail-collapse:hover { background: var(--st-swipe-hover); color: var(--st-swipe-text); }
+#st-swipe-tree-modal .st-swipe-timeline-detail-collapse:focus-visible { outline-offset: -3px; }
+#st-swipe-tree-modal .st-swipe-timeline-detail[hidden] { display: none; }
+#st-swipe-tree-modal .st-swipe-timeline-detail-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 8px;
+}
+#st-swipe-tree-modal .st-swipe-timeline-detail-heading strong { min-width: 0; align-self: center; }
+#st-swipe-tree-modal .st-swipe-timeline-detail-actions { flex-wrap: nowrap; }
+#st-swipe-tree-modal .st-swipe-timeline-detail-actions .menu_button { flex: 0 0 auto; white-space: nowrap; }
+#st-swipe-tree-modal .st-swipe-timeline-detail-meta { margin: 8px 0; }
+#st-swipe-tree-modal .st-swipe-timeline-detail-text { white-space: pre-wrap; line-height: 1.6; }
+#st-swipe-tree-modal .st-swipe-timeline-detail-meta,
+#st-swipe-tree-modal .st-swipe-timeline-references { color: var(--st-swipe-muted); }
+#st-swipe-tree-modal .st-swipe-timeline-references { border-top: 1px solid var(--st-swipe-border); padding-top: 10px; }
+#st-swipe-tree-modal .st-swipe-timeline-reference-list { margin: 6px 0 0; padding-inline-start: 18px; }
+#st-swipe-tree-modal .st-swipe-timeline-reference { overflow-wrap: anywhere; white-space: pre-wrap; }
+#st-swipe-tree-modal :is(button, input, [tabindex]):focus-visible { outline: 2px solid var(--st-swipe-focus); outline-offset: 2px; }
+
+@media (max-width: 600px) {
+  #st-swipe-tree-modal .st-swipe-timeline-container { width: 100%; height: 96dvh; max-height: 96dvh; border-radius: 8px; }
+  #st-swipe-tree-modal .st-swipe-timeline-header { padding-inline: 8px; max-height: 42%; }
+  #st-swipe-tree-modal .st-swipe-modal-header-top { flex-direction: row; align-items: center; }
+  #st-swipe-tree-modal .st-swipe-header-ops { width: auto; }
+  #st-swipe-tree-modal .st-swipe-timeline-role-legend { order: 3; flex-basis: 100%; gap: 4px 10px; }
+  #st-swipe-tree-modal .st-swipe-timeline-tools { max-height: calc(100% - 16px); overflow-y: auto; }
+  #st-swipe-tree-modal .st-swipe-timeline-content { flex-direction: column; }
+  #st-swipe-tree-modal .st-swipe-timeline-detail {
+    flex: 0 1 44%;
+    max-height: 44%;
+    max-width: 100%;
+    width: 100%;
+    border-inline-start: none;
+    border-top: 1px solid var(--st-swipe-border);
+    padding: 0;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: 24px minmax(0, 1fr);
+  }
+  #st-swipe-tree-modal .st-swipe-timeline-detail-pane { padding: 8px 10px; }
+  #st-swipe-tree-modal .st-swipe-timeline-detail-collapse { border-inline-end: 0; border-bottom: 1px solid var(--st-swipe-border); }
+  #st-swipe-tree-modal .st-swipe-timeline-detail-collapse::before { transform: rotate(45deg); }
+  #st-swipe-tree-modal .st-swipe-timeline-toolbar .st-swipe-timeline-search { flex-basis: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #st-swipe-tree-modal * { scroll-behavior: auto; transition: none; }
+}

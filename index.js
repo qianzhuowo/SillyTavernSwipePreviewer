@@ -1,7 +1,41 @@
 (async function () {
-  const PLUGIN_ID = "swipe-previewer";
+  const swipeData = await import('./swipe-data.mjs');
+  const nativeApi = await import('/script.js');
+  const { eventSource, event_types: nativeEventTypes } = await import('/scripts/events.js');
+  const { installNativeMessageButtons, installNativeTreeEntry, getNativePreviewMessage, prepareOverlayKeyboard, manageOverlayFocus, isTopSwipeOverlay } = await import('./native-integration.mjs');
+  let closeActivePreview = null;
+  let previewRequest = 0;
 
-  const BTN_PREVIEW_ID = PLUGIN_ID;
+  async function openBranchTree({ mesId, swipeIdx, source, isValid } = {}) {
+    const origin = window.SillyTavern?.getContext?.();
+    const originChat = origin?.chat;
+    const originChatId = origin?.chatId;
+    const fallbackId = Number.isInteger(mesId) ? mesId : (originChat?.length ?? 0) - 1;
+    const originMessage = originChat?.[fallbackId];
+    try {
+      const { showBranchTree } = await import('./branch-tree.js');
+      const latest = window.SillyTavern?.getContext?.();
+      if (latest?.chat !== originChat || latest?.chatId !== originChatId || (isValid && !isValid())) return;
+      showBranchTree({
+        focusMesId: fallbackId,
+        focusSwipeIdx: swipeIdx,
+        onPreview: (id, idx) => onPreviewClick(id, null, idx),
+        onClose: (reason) => {
+          if (source?.isConnected) source.hidden = false;
+          if (reason === 'locate') { closeActivePreview?.(); return; }
+          if (reason !== 'dismiss' || source?.isConnected) return;
+          const context = window.SillyTavern?.getContext?.();
+          if (context?.chat === originChat && context?.chatId === originChatId && originMessage && originChat[fallbackId] === originMessage) {
+            void onPreviewClick(fallbackId, null, swipeIdx);
+          }
+        },
+      });
+      if (source?.isConnected) source.hidden = true;
+    } catch (error) {
+      console.error('[Swipe Previewer] tree failed', error);
+      window.toastr?.error?.('无法打开分支树');
+    }
+  }
 
   const SETTINGS_KEY = "st-swipe-previewer-settings";
   const DEFAULT_SETTINGS = {
@@ -13,22 +47,22 @@
     renderMarkdownInTextView: false,
   };
 
-  /** @type {any} */
-  let ST_API;
   let settings = loadSettings();
-  /** @type {'mes'|'extra'|null} */
-  let registeredMode = null;
+  let nativeButtons;
 
-  async function init() {
-    // 插件依赖于 st-api-wrapper 提供的全局 API
-    ST_API = window.ST_API;
-    if (!ST_API) {
-      console.warn("[Swipe Previewer] ST_API 未就绪，正在等待...");
-      setTimeout(init, 1000);
-      return;
-    }
-
-    await applyButtonRegistration();
+  function init() {
+    nativeButtons = installNativeMessageButtons({
+      document, eventSource, eventTypes: nativeEventTypes,
+      getContext: () => window.SillyTavern?.getContext?.(),
+      onPreview: onPreviewClick,
+      onError: error => console.error('[Swipe Previewer] 消息按钮操作失败', error),
+    });
+    applyButtonRegistration();
+    // A chat-wide native menu entry remains available even for single-candidate chats.
+    installNativeTreeEntry({
+      document, eventSource, eventTypes: nativeEventTypes,
+      onOpen: () => openBranchTree(),
+    });
   }
 
   function loadSettings() {
@@ -44,65 +78,29 @@
 
   function saveSettings(next) {
     settings = { ...DEFAULT_SETTINGS, ...(next || {}) };
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+    try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); }
+    catch (error) { console.warn('[Swipe Previewer] 无法持久保存设置', error); }
     return settings;
   }
 
-  async function unregisterButtons() {
-    // 注：unregister 是幂等操作，调用不存在的 ID 不会抛错（wrapper 文档如此；同时这里也 catch 以防万一）
-    try { await ST_API.ui.unregisterMessageButton({ id: BTN_PREVIEW_ID }); } catch { }
-    try { await ST_API.ui.unregisterExtraMessageButton({ id: BTN_PREVIEW_ID }); } catch { }
+  function applyButtonRegistration() {
+    // Move the same native button in both the live template and existing messages.
+    nativeButtons?.setExtraMenu(settings.moveButtonsToExtraMenu);
   }
 
-  async function applyButtonRegistration() {
-    const mode = settings.moveButtonsToExtraMenu ? 'extra' : 'mes';
-    if (registeredMode === mode) return;
-
-    await unregisterButtons();
-
-    // 仅注册“分支预览”按钮；“设置”按钮移到预览窗口右上角操作区
-    if (mode === 'mes') {
-      // 注册消息按钮（与 Edit 同级，位于 .mes_buttons）
-      await ST_API.ui.registerMessageButton({
-        id: BTN_PREVIEW_ID,
-        icon: "fa-solid fa-layer-group",
-        title: "预览所有生成的回复 (Swipes)",
-        index: 0,
-        onClick: async (mesId, messageElement) => {
-          await onPreviewClick(mesId, messageElement);
-        },
-      });
-    } else {
-      // 注册扩展消息按钮（在 ... 展开菜单内，位于 .extraMesButtons）
-      await ST_API.ui.registerExtraMessageButton({
-        id: BTN_PREVIEW_ID,
-        icon: "fa-solid fa-layer-group",
-        title: "预览所有生成的回复 (Swipes)",
-        index: 0,
-        onClick: async (mesId, messageElement) => {
-          await onPreviewClick(mesId, messageElement);
-        },
-      });
-    }
-
-    registeredMode = mode;
-  }
-
-  async function onPreviewClick(mesId, messageElement) {
+  async function onPreviewClick(mesId, messageElement, focusIdx) {
+    const request = ++previewRequest;
+    mesId = Number(mesId);
+    const origin = window.SillyTavern?.getContext?.();
+    const originChat = origin?.chat;
+    const originMessage = originChat?.[mesId];
+    const chatId = origin?.chatId;
     try {
-      // 获取包含所有分支的消息数据
-      const res = await ST_API.chatHistory.get({
-        index: mesId,
-        includeSwipes: true
-      });
-      const message = res.message;
-
-      if (!message.swipes || message.swipes.length <= 1) {
-        window.toastr?.info?.("该消息没有多个分支可供预览");
-        return;
-      }
-
-      await showModal(mesId, message, messageElement);
+      const message = getNativePreviewMessage(origin, mesId);
+      if (!message) return;
+      const latest = window.SillyTavern?.getContext?.();
+      if (request !== previewRequest || latest?.chat !== originChat || latest?.chatId !== chatId || latest?.chat?.[mesId] !== originMessage) return;
+      await showModal(mesId, message, messageElement, focusIdx);
     } catch (err) {
       console.error("[Swipe Previewer] 预览失败:", err);
       window.toastr?.error?.("获取分支内容失败");
@@ -110,7 +108,7 @@
   }
 
   function showSettingsModal(opts = {}) {
-    const { onSettingsChanged } = opts || {};
+    const { onSettingsChanged, returnFocus } = opts || {};
 
     const modalId = "st-swipe-previewer-settings-modal";
     document.getElementById(modalId)?.remove();
@@ -160,9 +158,16 @@
       </div>
     `;
 
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.setAttribute('aria-label', '分支预览器设置');
+    prepareOverlayKeyboard(overlay);
     document.body.appendChild(overlay);
-
-    const closeModal = () => overlay.remove();
+    const releaseFocus = manageOverlayFocus(overlay, {
+      initialFocus: overlay.querySelector(`#${modalId}-close`), returnFocus,
+      onEscape: () => closeModal(),
+    });
+    const closeModal = () => { releaseFocus(); overlay.remove(); };
     overlay.querySelector(`#${modalId}-close`)?.addEventListener('click', closeModal);
     overlay.addEventListener('click', (e) => { if (e.target === overlay) closeModal(); });
 
@@ -195,12 +200,40 @@
   /**
    * 显示预览模态框
    */
-  async function showModal(mesId, message, messageElement) {
+  async function showModal(mesId, message, messageElement, focusIdx) {
     const modalId = "st-swipe-preview-modal";
-    document.getElementById(modalId)?.remove();
+    const returnFocus = messageElement?.querySelector('.st-swipe-previewer-button')
+      ?? document.querySelector(`#chat .mes[mesid="${mesId}"] .st-swipe-previewer-button`)
+      ?? document.activeElement;
+    closeActivePreview?.();
+    const originContext = window.SillyTavern.getContext();
+    const originChat = originContext.chat;
+    const originMessage = originChat[mesId];
+    const originChatId = originContext.chatId;
+    const eventTypes = originContext.eventTypes || originContext.event_types;
+    let closed = false;
+    let busy = false;
+    let cancelEdit = null;
+    const selected = new Set();
+    let selectionMode = false;
+    let jumpListWasHidden = false;
+    const canDelete = () => Array.isArray(originMessage.swipes) && originMessage.swipes.length > 1
+      && !originMessage.is_user && !originMessage.extra?.isSmallSys;
+    const signature = () => JSON.stringify([originMessage.swipes, originMessage.swipe_id, originMessage.mes, originMessage.swipe_info, originMessage.extra]);
+    let observedSignature = signature();
+    const assertContext = () => {
+      const ctx = window.SillyTavern.getContext();
+      if (closed || ctx.chat !== originChat || ctx.chatId !== originChatId || ctx.chat[mesId] !== originMessage) throw new Error('聊天已切换或楼层已变化，请重新打开预览');
+      const swipeState = ctx.swipe?.state?.();
+      if (nativeApi.isGenerating?.() || (swipeState && swipeState !== 'none')) throw new Error('请等待生成或分支切换完成后再操作');
+      if (document.querySelector('#chat .mes .edit_textarea')) throw new Error('请先完成聊天中的消息编辑');
+      if (nativeApi.isChatSaving) throw new Error('酒馆正在保存聊天，请稍后重试');
+      if (signature() !== observedSignature) throw new Error('分支已被其他操作更新，请重新打开预览');
+      return ctx;
+    };
 
     let swipes = Array.isArray(message?.swipes) ? [...message.swipes] : [];
-    let currentSwipeId = Number.isInteger(message?.swipeId) ? message.swipeId : 0;
+    let currentSwipeId = Number.isInteger(message?.swipe_id) ? message.swipe_id : 0;
 
     const modalOverlay = document.createElement('div');
     modalOverlay.id = modalId;
@@ -213,6 +246,8 @@
           <div class="st-swipe-modal-header-top">
             <span class="st-swipe-title">消息 #${mesId} (${swipes.length} 分支)</span>
             <div class="st-swipe-header-ops">
+              <button type="button" id="${modalId}-delete-mode" class="menu_button fa-solid fa-trash-can" title="进入删除选择模式" aria-label="进入删除选择模式" aria-pressed="false" aria-controls="${modalId}-selection-toolbar ${modalId}-jump-list"></button>
+              <button id="${modalId}-tree" class="menu_button fa-solid fa-code-branch" title="当前聊天分支树" aria-label="当前聊天分支树"></button>
               <div id="${modalId}-prev" class="menu_button fa-solid fa-chevron-left" title="上一个"></div>
               <div id="${modalId}-next" class="menu_button fa-solid fa-chevron-right" title="下一个"></div>
               <div id="${modalId}-toggle" class="menu_button fa-solid fa-list-ol" title="展开/收起列表"></div>
@@ -221,13 +256,18 @@
               <div id="${modalId}-close" class="menu_button fa-solid fa-xmark" title="关闭"></div>
             </div>
           </div>
-          <div id="${modalId}-jump-list" class="st-swipe-jump-list">
-            ${swipes.map((_, idx) => `
-              <div class="st-swipe-jump-item ${idx === currentSwipeId ? 'active' : ''}" data-idx="${idx}">
-                ${idx + 1}
-              </div>
-            `).join('')}
+          <div id="${modalId}-selection-toolbar" class="st-swipe-selection-toolbar" hidden>
+            <span class="st-swipe-selection-hint">点击下方编号选择待删分支</span>
+            <button type="button" class="menu_button" data-selection="all">全选</button>
+            <button type="button" class="menu_button" data-selection="invert">反选</button>
+            <button type="button" class="menu_button" data-selection="others">选择非当前分支</button>
+            <button type="button" class="menu_button" data-selection="none">取消选择</button>
+            <span class="st-swipe-selection-count" role="status" aria-live="polite">已选 0 项</span>
+            <button type="button" class="menu_button" data-selection="delete" disabled>确认删除</button>
+            <button type="button" class="menu_button" data-selection="exit">退出选择</button>
+            <span class="st-swipe-selection-legend"><span>● 当前楼层分支</span><span>✓ 待删选中</span><span>空白：未选中</span></span>
           </div>
+          <div id="${modalId}-jump-list" class="st-swipe-jump-list" aria-label="分支导航"></div>
         </div>
 
         <div class="st-swipe-modal-content" id="${modalId}-content">
@@ -236,10 +276,14 @@
       </div>
     `;
 
+    modalOverlay.setAttribute('role', 'dialog');
+    modalOverlay.setAttribute('aria-modal', 'true');
+    modalOverlay.setAttribute('aria-label', `消息 ${mesId} 的分支预览`);
+    prepareOverlayKeyboard(modalOverlay);
     document.body.appendChild(modalOverlay);
 
     // 状态
-    let currentViewIdx = currentSwipeId;
+    let currentViewIdx = Number.isInteger(focusIdx) ? focusIdx : currentSwipeId;
     /** 整体渲染预览（全局开关） */
     let renderPreviewGlobal = false;
     /** 每个分支的单独开关（优先级：单独开关覆盖全局） */
@@ -258,7 +302,7 @@
       if (!Number.isFinite(idx) || !Number.isFinite(height)) return;
 
       const frame = modalOverlay.querySelector(`#${modalId}-frame-${idx}`);
-      if (!frame) return;
+      if (!frame || event.source !== frame.contentWindow) return;
 
       // 更激进的“去掉空白”：对高度做一点缩减，避免滚动条/边距导致的过高
       const h = Math.min(Math.max(height - 4, 160), 2400);
@@ -287,21 +331,22 @@
       const ctx = window.SillyTavern?.getContext?.();
       const stMsg = ctx?.chat?.[mesId];
 
-      if (Array.isArray(stMsg?.swipes)) {
-        swipes = stMsg.swipes;
-        message.swipes = stMsg.swipes;
+      if (Array.isArray(stMsg?.swipes) && stMsg.swipes.length) {
+        swipes = [...stMsg.swipes];
+        message.swipes = swipes;
       } else {
         swipes = Array.isArray(message?.swipes) ? message.swipes : [];
       }
 
       const rawCurrent = Number.isInteger(stMsg?.swipe_id)
         ? stMsg.swipe_id
-        : (Number.isInteger(message?.swipeId) ? message.swipeId : 0);
+        : (Number.isInteger(message?.swipe_id) ? message.swipe_id : 0);
       currentSwipeId = clampSwipeIdx(rawCurrent, swipes.length);
-      message.swipeId = currentSwipeId;
+      message.swipe_id = currentSwipeId;
 
       currentViewIdx = clampSwipeIdx(currentViewIdx, swipes.length);
       swipeTextsRaw = swipes.map(getSwipeText);
+      if (stMsg && swipeTextsRaw.length) swipeTextsRaw[currentSwipeId] = getSwipeText(stMsg.mes);
       swipeTexts = swipeTextsRaw;
     };
 
@@ -312,7 +357,7 @@
     // 可选：应用酒馆正则（global + scoped + preset）
     async function importRegexEngine() {
       try {
-        return await eval('import("/scripts/extensions/regex/engine.js")');
+        return await import('/scripts/extensions/regex/engine.js');
       } catch (e) {
         console.warn('[Swipe Previewer] Regex engine import failed', e);
         return null;
@@ -330,34 +375,13 @@
       const engine = await getRegexEngine();
       if (!engine) return text;
 
-      const { getScriptsByType, SCRIPT_TYPES, runRegexScript } = engine;
-      if (!getScriptsByType || !SCRIPT_TYPES || !runRegexScript) return text;
-
-      const options = { allowedOnly: true };
-      const globalScripts = (getScriptsByType(SCRIPT_TYPES.GLOBAL, options) || []);
-      const scopedScripts = (getScriptsByType(SCRIPT_TYPES.SCOPED, options) || []);
-      const presetScripts = (getScriptsByType(SCRIPT_TYPES.PRESET, options) || []);
-
-      const scripts = [...globalScripts, ...scopedScripts, ...presetScripts];
-
-      let out = String(text ?? '');
-      for (const s of scripts) {
-        try {
-          if (!s || s.disabled) continue;
-
-          const p = s.placement;
-          const placements = Array.isArray(p) ? p : (typeof p === 'number' ? [p] : []);
-          if (placements.length > 0 && !placements.includes(placement)) continue;
-
-          // 预览属于用户显示视图：跳过 promptOnly 的脚本
-          if (s.promptOnly) continue;
-
-          out = runRegexScript(s, out);
-        } catch (e) {
-          console.warn('[Swipe Previewer] runRegexScript failed', e);
-        }
-      }
-      return out;
+      // Use the same display pipeline as messageFormatting: respect disabled extensions,
+      // markdownOnly/promptOnly, script order and min/max depth. Don't re-run source edits.
+      return engine.getRegexedString?.(String(text ?? ''), placement, {
+        isMarkdown: true,
+        isPrompt: false,
+        depth: originContext.chat.length - mesId - 1,
+      }) ?? text;
     }
 
     // 重新计算（是否应用正则）后的分支文本：用于“设置”里切换开关后实时刷新
@@ -372,7 +396,7 @@
 
       try {
         const next = await Promise.all(swipeTextsRaw.map(async (t) => {
-          return await applyAllTavernRegex(t, 2);
+          return await applyAllTavernRegex(t, originMessage.is_user ? 1 : 2);
         }));
 
         // 若用户快速连点开关，只应用最后一次结果
@@ -393,9 +417,7 @@
     const renderJumpList = () => {
       if (!jumpListEl) return;
       jumpListEl.innerHTML = swipes.map((_, idx) => `
-        <div class="st-swipe-jump-item ${idx === currentSwipeId ? 'active' : ''}" data-idx="${idx}">
-          ${idx + 1}
-        </div>
+        <button type="button" class="st-swipe-jump-item ${idx === currentSwipeId ? 'active' : ''}" data-idx="${idx}" ${idx === currentSwipeId ? 'aria-current="true"' : ''}>${idx + 1}</button>
       `).join('');
     };
 
@@ -421,7 +443,6 @@
                 <button class="menu_button st-swipe-action-edit" data-idx="${idx}">编辑分支</button>
                 <button class="menu_button st-swipe-action-move-up" data-idx="${idx}" ${idx === 0 ? 'disabled' : ''}>上移</button>
                 <button class="menu_button st-swipe-action-move-down" data-idx="${idx}" ${idx === swipes.length - 1 ? 'disabled' : ''}>下移</button>
-                <button class="menu_button st-swipe-action-delete" data-idx="${idx}" title="删除该分支">删除分支</button>
               </div>
             </div>
 
@@ -821,7 +842,7 @@
 
     const getRootCssVar = (name, fallback = '') => {
       try {
-        const v = getComputedStyle(document.documentElement).getPropertyValue(name);
+        const v = getComputedStyle(modalOverlay).getPropertyValue(name);
         const s = String(v || '').trim();
         return s || fallback;
       } catch {
@@ -835,10 +856,14 @@
       const body = String(htmlBody ?? '');
 
       // 从宿主页面读取 md-lite 配色（iframe 内的 srcdoc 有自己的一套 <style>，不会继承）。
-      const mdEmColor = getRootCssVar('--st-swipe-previewer-md-em-color', '#67c5ff');
-      const mdStrongColor = getRootCssVar('--st-swipe-previewer-md-strong-color', '#ffa011');
-      const mdQuoteColor = getRootCssVar('--st-swipe-previewer-md-quote-color', '#7dd3fc');
-      const mdQuoteBg = getRootCssVar('--st-swipe-previewer-md-quote-bg', 'rgba(125, 211, 252, 0.10)');
+      const mdEmColor = getRootCssVar('--st-swipe-previewer-md-em-color', 'inherit');
+      const mdStrongColor = getRootCssVar('--st-swipe-previewer-md-strong-color', 'inherit');
+      const mdQuoteColor = getRootCssVar('--st-swipe-previewer-md-quote-color', 'inherit');
+      const mdQuoteBg = getRootCssVar('--st-swipe-previewer-md-quote-bg', 'transparent');
+      const hostStyle = getComputedStyle(modalOverlay);
+      const hostColor = hostStyle.color;
+      const hostFont = hostStyle.fontFamily.replace(/</g, '');
+      const hostBorder = getRootCssVar('--st-swipe-border', 'GrayText');
 
       // 自适应高度：在 iframe 内用 ResizeObserver/MO 发送高度给父页面
       const heightScript = `(() => {
@@ -870,7 +895,7 @@
         setTimeout(send, 0);
         setTimeout(send, 50);
         setTimeout(send, 200);
-        setInterval(send, 1000);
+        // ResizeObserver and mutation/load events cover content changes without a permanent timer.
       })();`;
 
       return `<!doctype html>
@@ -879,8 +904,8 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <style>
-  :root { color-scheme: dark; }
-  body { margin: 0; padding: 12px; font-family: var(--main-font, sans-serif); background: #111; color: #eee; line-height: 1.6; }
+  :root { color-scheme: normal; }
+  body { margin: 0; padding: 12px; font-family: ${hostFont}; font-size: ${hostStyle.fontSize}; background: transparent; color: ${hostColor}; line-height: 1.6; overflow-wrap: anywhere; }
   img { max-width: 100%; height: auto; }
 
   /* 简洁的代码块 + 自动换行 */
@@ -888,8 +913,8 @@
     overflow-x: hidden;
     overflow-y: auto;
     padding: 8px 10px;
-    background: rgba(255,255,255,0.04);
-    border: 1px solid rgba(255,255,255,0.10);
+    background: color-mix(in srgb, currentColor 5%, transparent);
+    border: 1px solid ${hostBorder};
     border-radius: 6px;
     margin: 6px 0;
     white-space: pre-wrap;
@@ -898,7 +923,7 @@
   }
 
   code {
-    background: rgba(255,255,255,0.06);
+    background: color-mix(in srgb, currentColor 6%, transparent);
     padding: 0 4px;
     border-radius: 4px;
     white-space: pre-wrap;
@@ -908,10 +933,10 @@
 
   pre code { background: transparent; padding: 0; border-radius: 0; }
 
-  a { color: #6ea8fe; }
+  a { color: ${mdQuoteColor}; }
   table { border-collapse: collapse; }
-  th, td { border: 1px solid rgba(255,255,255,0.15); padding: 6px 8px; }
-  blockquote { border-left: 3px solid rgba(255,255,255,0.25); margin: 8px 0; padding-left: 10px; }
+  th, td { border: 1px solid ${hostBorder}; padding: 6px 8px; }
+  blockquote { border-left: 3px solid ${hostBorder}; margin: 8px 0; padding-left: 10px; }
 
   /* md-lite（iframe）样式：让 markdownToHtmlLite / markdownToHtmlTextLite 产出的 .st-swipe-md-root 在 iframe 内也能正确着色 */
   .st-swipe-md-root em { color: ${mdEmColor}; }
@@ -980,7 +1005,7 @@
       updateRenderButtonStates();
     };
 
-    const scrollToIdx = (idx, behavior = 'smooth') => {
+    const scrollToIdx = (idx, behavior = 'auto') => {
       if (!swipes.length) {
         currentViewIdx = 0;
         return;
@@ -1022,168 +1047,213 @@
       else renderPreviewByIdx.delete(a);
     };
 
-    const removeRenderPreviewStateAt = (targetIdx) => {
+    const remapRenderPreviewState = (kept) => {
       const next = new Map();
-      for (const [idx, value] of renderPreviewByIdx.entries()) {
-        if (idx < targetIdx) next.set(idx, value);
-        else if (idx > targetIdx) next.set(idx - 1, value);
-      }
+      kept.forEach((oldIndex, newIndex) => {
+        if (renderPreviewByIdx.has(oldIndex)) next.set(newIndex, renderPreviewByIdx.get(oldIndex));
+      });
       renderPreviewByIdx.clear();
-      for (const [idx, value] of next.entries()) {
-        renderPreviewByIdx.set(idx, value);
-      }
+      for (const [idx, value] of next) renderPreviewByIdx.set(idx, value);
     };
 
+    function updateSelection() {
+      const deleteModeButton = modalOverlay.querySelector(`#${modalId}-delete-mode`);
+      deleteModeButton.disabled = busy || !canDelete();
+      deleteModeButton.classList.toggle('active', selectionMode);
+      deleteModeButton.setAttribute('aria-pressed', String(selectionMode));
+      deleteModeButton.title = selectionMode ? '退出删除选择模式' : '进入删除选择模式';
+      deleteModeButton.setAttribute('aria-label', deleteModeButton.title);
+      modalOverlay.classList.toggle('st-swipe-selection-mode', selectionMode);
+      modalOverlay.querySelector('.st-swipe-selection-toolbar').hidden = !selectionMode;
+      modalOverlay.querySelector('.st-swipe-selection-count').textContent = `已选 ${selected.size} / ${swipes.length} 项（至少保留 1 项）`;
+      modalOverlay.querySelectorAll('[data-selection]').forEach(button => { button.disabled = busy; });
+      modalOverlay.querySelector('[data-selection="delete"]').disabled = busy || !selectionMode || !selected.size || selected.size >= swipes.length;
+      modalOverlay.querySelector(`#${modalId}-toggle`).setAttribute('aria-disabled', String(selectionMode));
+      jumpListEl.setAttribute('aria-label', selectionMode ? '选择待删除的分支' : '分支导航');
+      jumpListEl.querySelectorAll('.st-swipe-jump-item').forEach(button => {
+        const idx = Number(button.dataset.idx);
+        const checked = selectionMode && selected.has(idx);
+        button.classList.toggle('selected', checked);
+        button.disabled = busy;
+        if (selectionMode) button.setAttribute('aria-pressed', String(checked));
+        else button.removeAttribute('aria-pressed');
+        const state = `${idx === currentSwipeId ? '，当前楼层分支' : ''}${checked ? '，待删选中' : selectionMode ? '，未选中' : ''}`;
+        button.title = `分支 ${idx + 1}${state}；${selectionMode ? '点击切换选择' : '点击定位预览'}`;
+        button.setAttribute('aria-label', button.title);
+      });
+    }
+
+    function setSelectionMode(enabled) {
+      if (enabled && !canDelete()) return;
+      if (enabled && !selectionMode) {
+        jumpListWasHidden = jumpListEl.classList.contains('hidden');
+        jumpListEl.classList.remove('hidden');
+      } else if (!enabled && selectionMode) {
+        jumpListEl.classList.toggle('hidden', jumpListWasHidden);
+      }
+      selectionMode = enabled;
+      if (!enabled) selected.clear();
+      updateSelection();
+    }
+
+    // One operation at a time, including the confirmation/editor wait. Revalidate after awaits.
+    async function withMutation(operation) {
+      if (busy) return;
+      try {
+        assertContext();
+        busy = true;
+        modalOverlay.setAttribute('aria-busy', 'true');
+        updateSelection();
+        await operation();
+      } catch (error) {
+        console.error('[Swipe Previewer] operation failed', error);
+        window.toastr?.error?.(error.message || '操作失败');
+      } finally {
+        busy = false;
+        modalOverlay.removeAttribute('aria-busy');
+        if (!closed) updateSelection();
+      }
+    }
+
+    async function commitMutation(change, eventName = 'MESSAGE_SWIPED', eventArgs = [mesId]) {
+      const ctx = assertContext();
+      if (typeof ctx.saveChat !== 'function') throw new Error('当前酒馆版本不提供聊天保存接口');
+      const backup = structuredClone(originMessage);
+      let result;
+      try {
+        nativeApi.cancelDebouncedChatSave?.();
+        if (ctx.chatMetadata) ctx.chatMetadata.tainted = true;
+        result = await change(originMessage);
+        const afterChange = window.SillyTavern.getContext();
+        if (closed || afterChange.chatId !== originChatId || afterChange.chat[mesId] !== originMessage) throw new Error('聊天已切换，未保存此次修改');
+        const ensureIdentity = () => {
+          const latest = window.SillyTavern.getContext();
+          if (closed || latest.chatId !== originChatId || latest.chat[mesId] !== originMessage) throw new Error('聊天已变化，已停止后续更新');
+        };
+        // Native editing allows listeners to normalize the message before rendering.
+        if (eventName === 'MESSAGE_EDITED' && eventTypes?.MESSAGE_EDITED) {
+          await ctx.eventSource.emit(eventTypes.MESSAGE_EDITED, ...eventArgs);
+          ensureIdentity();
+        }
+        ctx.updateMessageBlock?.(mesId, originMessage);
+        ctx.swipe?.refresh?.(true, false);
+        const event = eventName === 'MESSAGE_EDITED' ? eventTypes?.MESSAGE_UPDATED : eventTypes?.[eventName];
+        if (event) await ctx.eventSource.emit(event, ...eventArgs);
+        ensureIdentity();
+        swipeData.prepareSwipes(originMessage);
+        if (nativeApi.isChatSaving) throw new Error('酒馆正在保存其他修改，请稍后重试');
+        await ctx.saveChat();
+        const afterSave = window.SillyTavern.getContext();
+        if (afterSave.chatId !== originChatId || afterSave.chat[mesId] !== originMessage) {
+          window.toastr?.warning?.('保存期间聊天发生切换，请重新打开原聊天确认修改是否保存');
+          closeModal();
+        }
+      } catch (error) {
+        for (const key of Object.keys(originMessage)) delete originMessage[key];
+        Object.assign(originMessage, backup);
+        if (window.SillyTavern.getContext().chat[mesId] === originMessage) {
+          ctx.updateMessageBlock?.(mesId, originMessage);
+          ctx.swipe?.refresh?.(true, false);
+        }
+        throw error;
+      } finally {
+        observedSignature = signature();
+      }
+      message.swipes = originMessage.swipes;
+      message.swipe_id = originMessage.swipe_id;
+      return result;
+    }
+
+    let refreshSequence = 0;
     async function refreshModalList(opts = {}) {
+      const sequence = ++refreshSequence;
       const { focusIdx = currentViewIdx, keepScroll = true } = opts;
+      if (closed) return;
       syncSwipesFromChat();
       await recomputeSwipeTexts();
+      if (closed || sequence !== refreshSequence) return;
       renderTitle();
       renderJumpList();
       renderCardsMarkup();
       bindDynamicEvents();
       renderAllCards();
+      if (!Array.isArray(originMessage.swipes) || !originMessage.swipes.length || originMessage.is_user || originMessage.extra?.isSmallSys) {
+        contentEl.querySelectorAll('.st-swipe-card-actions button').forEach(button => { button.disabled = true; });
+      }
+      updateSelection();
       if (keepScroll) scrollToIdx(focusIdx, 'auto');
     }
 
     // 对外操作：将分支应用到聊天中
-    const applySwipeToChat = async (targetSwipeIdx) => {
-      const ctx = window.SillyTavern?.getContext?.();
-      const chat = ctx?.chat;
-      const stMsg = chat?.[mesId];
-
-      if (!stMsg) throw new Error(`找不到 chat[${mesId}]`);
-      if (!Array.isArray(stMsg.swipes) || targetSwipeIdx < 0 || targetSwipeIdx >= stMsg.swipes.length) {
-        throw new Error('目标分支不存在');
-      }
-
-      // 应用到酒馆内部数据
-      stMsg.swipe_id = targetSwipeIdx;
-      stMsg.mes = stMsg.swipes[targetSwipeIdx];
-
-      // 尝试同步该分支的媒体信息（如果酒馆提供 swipe_info）
-      try {
-        const swipeMedia = stMsg.swipe_info?.[targetSwipeIdx]?.extra?.media;
-        if (Array.isArray(swipeMedia)) {
-          stMsg.extra = { ...(stMsg.extra || {}), media: swipeMedia, media_index: 0, inline_image: true };
-        }
-      } catch { }
-
-      // 同步 UI
-      if (typeof ctx?.updateMessageBlock === 'function') {
-        ctx.updateMessageBlock(mesId, stMsg);
-      } else {
-        // 兜底：触发 chat changed
-        ctx?.eventSource?.emit?.(ctx?.event_types?.CHAT_CHANGED);
-      }
-
-      // 同步 swipes-counter（例如：1/14）
-      try {
-        const mesEl = document.querySelector(`#chat .mes[mesid="${mesId}"]`);
-        const counter = mesEl?.querySelector?.('.swipes-counter');
-        const total = Array.isArray(stMsg.swipes) ? stMsg.swipes.length : null;
-        if (counter && total) {
-          counter.textContent = `${targetSwipeIdx + 1}/${total}`;
-        }
-      } catch { }
-
-      // 持久化
-      if (typeof ctx?.saveChat === 'function') {
-        await ctx.saveChat();
-      }
-
-      message.swipes = stMsg.swipes;
-      message.swipeId = targetSwipeIdx;
-    };
+    const applySwipeToChat = async (targetSwipeIdx) => commitMutation(stMsg => {
+      swipeData.prepareSwipes(stMsg);
+      swipeData.activateSwipe(stMsg, targetSwipeIdx);
+    });
 
     const jumpToSwipe = async (targetSwipeIdx) => {
       await applySwipeToChat(targetSwipeIdx);
       closeModal();
-      setTimeout(() => {
-        try {
-          ST_API.ui.scrollChat({ target: 'bottom', behavior: 'smooth' });
-        } catch { }
-      }, 80);
+      // Do not jump to the bottom when changing an historical floor.
+      document.querySelector(`#chat .mes[mesid="${mesId}"]`)?.scrollIntoView({ behavior: 'auto', block: 'center' });
     };
 
     const createBranchFromSwipe = async (targetSwipeIdx) => {
+      // Use the native data API rather than depending on a possibly unloaded message DOM.
+      const { createBranch } = await import('/scripts/bookmarks.js');
+      assertContext();
       await applySwipeToChat(targetSwipeIdx);
-
-      const mesEl = messageElement || document.querySelector(`#chat .mes[mesid="${mesId}"]`);
-      const btn = mesEl?.querySelector?.('.mes_create_branch');
-
-      if (!btn) {
-        window.toastr?.error?.('找不到“创建分支”按钮，可能不是 AI 楼层或酒馆版本不支持');
-        return;
-      }
-
-      // 使用酒馆原生功能创建分支
-      btn.click();
+      const ctx = assertContext();
+      const name = await createBranch(mesId);
+      // createBranch adds extra.branches but does not persist the source chat itself.
+      const latest = window.SillyTavern.getContext();
+      if (closed || latest.chatId !== originChatId || latest.chat[mesId] !== originMessage) throw new Error('聊天已切换，请在聊天列表查看新建分支');
+      if (!name) throw new Error('创建分支存档失败');
+      swipeData.prepareSwipes(originMessage);
+      observedSignature = signature();
+      await ctx.saveChat();
+      assertContext();
       closeModal();
-    };
-
-    const swapArrayItem = (arr, a, b) => {
-      const t = arr[a];
-      arr[a] = arr[b];
-      arr[b] = t;
+      if (ctx.groupId) await ctx.openGroupChat(ctx.groupId, name);
+      else await ctx.openCharacterChat(name);
     };
 
     const moveSwipeOrder = async (fromIdx, toIdx) => {
-      const ctx = window.SillyTavern?.getContext?.();
-      const chat = ctx?.chat;
-      const stMsg = chat?.[mesId];
-
-      if (!stMsg) throw new Error(`找不到 chat[${mesId}]`);
-      if (!Array.isArray(stMsg.swipes)) throw new Error('当前消息没有分支数据');
-      if (fromIdx === toIdx) return;
-
-      const maxIdx = stMsg.swipes.length - 1;
-      if (fromIdx < 0 || toIdx < 0 || fromIdx > maxIdx || toIdx > maxIdx) {
-        throw new Error('目标分支下标越界');
-      }
+      await commitMutation(stMsg => swipeData.moveSwipe(stMsg, fromIdx, toIdx));
       swapRenderPreviewState(fromIdx, toIdx);
-
-      swapArrayItem(stMsg.swipes, fromIdx, toIdx);
-      if (Array.isArray(stMsg.swipe_info) && stMsg.swipe_info.length > Math.max(fromIdx, toIdx)) {
-        swapArrayItem(stMsg.swipe_info, fromIdx, toIdx);
-      }
-
-      const current = Number.isInteger(stMsg.swipe_id) ? stMsg.swipe_id : 0;
-      let nextCurrent = current;
-      if (current === fromIdx) nextCurrent = toIdx;
-      else if (current === toIdx) nextCurrent = fromIdx;
-
-      nextCurrent = Math.min(Math.max(nextCurrent, 0), stMsg.swipes.length - 1);
-      await applySwipeToChat(nextCurrent);
+      const hasFrom = selected.has(fromIdx);
+      const hasTo = selected.has(toIdx);
+      selected.delete(fromIdx);
+      selected.delete(toIdx);
+      if (hasFrom) selected.add(toIdx);
+      if (hasTo) selected.add(fromIdx);
     };
 
-    const deleteSwipe = async (targetSwipeIdx) => {
-      const shouldDelete = typeof window.confirm === 'function'
-        ? window.confirm(`确定要删除分支 #${targetSwipeIdx + 1} 吗？\n此操作会直接修改当前聊天记录。`)
-        : true;
-      if (!shouldDelete) return false;
-
-      const ctx = window.SillyTavern?.getContext?.();
-      const chat = ctx?.chat;
-      const stMsg = chat?.[mesId];
-
-      if (!stMsg) throw new Error(`找不到 chat[${mesId}]`);
-      if (!Array.isArray(stMsg.swipes) || stMsg.swipes.length <= 1) {
-        throw new Error('至少需要保留一个分支');
-      }
-      if (targetSwipeIdx < 0 || targetSwipeIdx >= stMsg.swipes.length) {
-        throw new Error('目标分支不存在');
-      }
-      removeRenderPreviewStateAt(targetSwipeIdx);
-
-      stMsg.swipes.splice(targetSwipeIdx, 1);
-      if (Array.isArray(stMsg.swipe_info) && stMsg.swipe_info.length > targetSwipeIdx) {
-        stMsg.swipe_info.splice(targetSwipeIdx, 1);
-      }
-
-      const current = Number.isInteger(stMsg.swipe_id) ? stMsg.swipe_id : 0;
-      const nextCurrent = Math.min(Math.max(targetSwipeIdx < current ? current - 1 : current, 0), stMsg.swipes.length - 1);
-      await applySwipeToChat(nextCurrent);
+    const deleteSelectedSwipes = async (indices) => {
+      assertContext();
+      const targets = [...new Set(indices)].sort((a, b) => a - b);
+      if (!targets.length || targets.length >= swipes.length) throw new Error('请选择分支，并至少保留一个分支');
+      const prompt = `确定删除 ${targets.length} 个分支（#${targets.map(i => i + 1).join('、#')}）？\n${targets.includes(currentSwipeId) ? '包含当前分支，将自动选择下一个可用分支。\n' : ''}此操作会修改当前聊天，无法撤销。`;
+      const ctx = window.SillyTavern.getContext();
+      const confirmed = ctx.Popup?.show?.confirm
+        ? await ctx.Popup.show.confirm('删除分支', prompt)
+        : window.confirm(prompt);
+      if (!confirmed) return false;
+      assertContext();
+      const kept = swipes.map((_, index) => index).filter(index => !targets.includes(index));
+      const result = await commitMutation(async stMsg => {
+        // Descending indices refer to the original selection. Each native event sees
+        // the exact intermediate arrays/payload, so extension-owned indices can follow.
+        for (const swipeId of [...targets].reverse()) {
+          swipeData.deleteSwipes(stMsg, [swipeId]);
+          const event = eventTypes?.MESSAGE_SWIPE_DELETED;
+          if (event) await ctx.eventSource.emit(event, { messageId: mesId, swipeId, newSwipeId: stMsg.swipe_id });
+          const latest = window.SillyTavern.getContext();
+          if (closed || latest.chatId !== originChatId || latest.chat[mesId] !== originMessage) throw new Error('聊天已变化，已停止批量删除');
+        }
+        return { kept, current: stMsg.swipe_id };
+      });
+      remapRenderPreviewState(result.kept);
+      setSelectionMode(false);
       return true;
     };
 
@@ -1205,7 +1275,7 @@
               </div>
             </div>
             <div class="st-swipe-modal-content" style="padding-top: 14px;">
-              <textarea id="${editModalId}-textarea" class="st-swipe-edit-textarea" spellcheck="false"></textarea>
+              <textarea id="${editModalId}-textarea" class="text_pole st-swipe-edit-textarea" spellcheck="false"></textarea>
               <div class="st-swipe-edit-actions">
                 <button id="${editModalId}-cancel" class="menu_button">取消</button>
                 <button id="${editModalId}-save" class="menu_button st-swipe-edit-save">保存</button>
@@ -1215,37 +1285,50 @@
           </div>
         `;
 
+        editOverlay.setAttribute('role', 'dialog');
+        editOverlay.setAttribute('aria-modal', 'true');
+        editOverlay.setAttribute('aria-label', `编辑分支 ${idx + 1}`);
+        prepareOverlayKeyboard(editOverlay);
         document.body.appendChild(editOverlay);
 
         const textarea = editOverlay.querySelector(`#${editModalId}-textarea`);
+        const releaseEditFocus = manageOverlayFocus(editOverlay, {
+          initialFocus: textarea,
+          returnFocus: () => modalOverlay.querySelector(`.st-swipe-card[data-idx="${idx}"] .st-swipe-action-edit`),
+          canRestore: () => !closed,
+        });
         if (textarea) {
           textarea.value = String(initialText ?? '');
-          textarea.focus();
           const len = textarea.value.length;
           textarea.setSelectionRange(len, len);
         }
 
-        let closed = false;
+        let editClosed = false;
         const done = (value) => {
-          if (closed) return;
-          closed = true;
+          if (editClosed) return;
+          editClosed = true;
+          releaseEditFocus();
           editOverlay.remove();
           window.removeEventListener('keydown', onKeydown, true);
+          cancelEdit = null;
           resolve(value);
         };
+        cancelEdit = () => done(null);
 
         const onKeydown = (e) => {
-          if (!document.getElementById(editModalId)) return;
+          if (!isTopSwipeOverlay(editOverlay)) return;
           if (e.key === 'Escape') {
             e.preventDefault();
-            done(null);
+            e.stopImmediatePropagation();
+            if (!e.isComposing && e.keyCode !== 229 && !e.repeat) done(null);
             return;
           }
 
           const isSaveHotkey = (e.key === 'Enter') && (e.ctrlKey || e.metaKey);
           if (isSaveHotkey) {
             e.preventDefault();
-            done(textarea?.value ?? '');
+            e.stopImmediatePropagation();
+            if (!e.isComposing && e.keyCode !== 229 && !e.repeat) done(textarea?.value ?? '');
           }
         };
         window.addEventListener('keydown', onKeydown, true);
@@ -1260,175 +1343,146 @@
     };
 
     const editSwipe = async (targetSwipeIdx) => {
-      const ctx = window.SillyTavern?.getContext?.();
-      const chat = ctx?.chat;
-      const stMsg = chat?.[mesId];
-
-      if (!stMsg) throw new Error(`找不到 chat[${mesId}]`);
-      if (!Array.isArray(stMsg.swipes) || targetSwipeIdx < 0 || targetSwipeIdx >= stMsg.swipes.length) {
-        throw new Error('目标分支不存在');
-      }
-
-      const oldText = String(stMsg.swipes[targetSwipeIdx] ?? '');
+      const stMsg = assertContext().chat[mesId];
+      if (!Array.isArray(stMsg.swipes) || targetSwipeIdx < 0 || targetSwipeIdx >= stMsg.swipes.length) throw new Error('目标分支不存在');
+      const oldText = targetSwipeIdx === stMsg.swipe_id ? stMsg.mes : String(stMsg.swipes[targetSwipeIdx] ?? '');
       const editedText = await showEditSwipeModal({ idx: targetSwipeIdx, initialText: oldText });
-      if (editedText === null) return false;
-      if (editedText === oldText) return false;
-
-      stMsg.swipes[targetSwipeIdx] = editedText;
-
-      const current = Number.isInteger(stMsg.swipe_id) ? stMsg.swipe_id : 0;
-      if (current === targetSwipeIdx) {
-        await applySwipeToChat(targetSwipeIdx);
-      } else {
-        if (typeof ctx?.saveChat === 'function') {
-          await ctx.saveChat();
-        }
-        message.swipes = stMsg.swipes;
-      }
-
+      if (editedText === null || editedText === oldText) return false;
+      await commitMutation(message => {
+        swipeData.prepareSwipes(message);
+        message.swipes[targetSwipeIdx] = editedText;
+        // Cached token counts refer to the old text.
+        if (message.swipe_info[targetSwipeIdx]?.extra) delete message.swipe_info[targetSwipeIdx].extra.token_count;
+        if (message.swipe_id === targetSwipeIdx) swipeData.activateSwipe(message, targetSwipeIdx);
+      }, targetSwipeIdx === stMsg.swipe_id ? 'MESSAGE_EDITED' : null);
       return true;
     };
 
     function bindDynamicEvents() {
-      modalOverlay.querySelectorAll('.st-swipe-jump-item').forEach(el => {
-        el.addEventListener('click', (e) => {
-          // 防止移动端出现点击触发背景滚动/点击穿透等问题
-          e.preventDefault();
-          e.stopPropagation();
-          const idx = parseInt(el.getAttribute('data-idx') || '0', 10);
-          scrollToIdx(idx);
-        });
-      });
-
-      modalOverlay.querySelectorAll('.st-swipe-action-switch').forEach(el => {
-        el.addEventListener('click', async (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          const idx = parseInt(el.getAttribute('data-idx') || '0', 10);
-          try {
-            await jumpToSwipe(idx);
-          } catch (err) {
-            console.error('[Swipe Previewer] switch floor content failed', err);
-            window.toastr?.error?.('切换楼层内容失败');
-          }
-        });
-      });
-
-      modalOverlay.querySelectorAll('.st-swipe-action-branch').forEach(el => {
-        el.addEventListener('click', async (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          const idx = parseInt(el.getAttribute('data-idx') || '0', 10);
-          try {
-            await createBranchFromSwipe(idx);
-          } catch (err) {
-            console.error('[Swipe Previewer] create branch failed', err);
-            window.toastr?.error?.('创建新存档失败');
-          }
-        });
-      });
-
-      modalOverlay.querySelectorAll('.st-swipe-action-edit').forEach(el => {
-        el.addEventListener('click', async (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-
-          const idx = parseInt(el.getAttribute('data-idx') || '0', 10);
-          try {
-            const changed = await editSwipe(idx);
-            if (!changed) return;
-            await refreshModalList({ focusIdx: idx });
-            window.toastr?.success?.('分支内容已更新');
-          } catch (err) {
-            console.error('[Swipe Previewer] edit swipe failed', err);
-            window.toastr?.error?.('编辑分支失败');
-          }
-        });
-      });
-
-      modalOverlay.querySelectorAll('.st-swipe-action-move-up').forEach(el => {
-        el.addEventListener('click', async (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          if (el.hasAttribute('disabled')) return;
-
-          const idx = parseInt(el.getAttribute('data-idx') || '0', 10);
-          if (idx <= 0) return;
-
-          try {
-            await moveSwipeOrder(idx, idx - 1);
-            await refreshModalList({ focusIdx: idx - 1 });
-          } catch (err) {
-            console.error('[Swipe Previewer] move swipe up failed', err);
-            window.toastr?.error?.('上移分支失败');
-          }
-        });
-      });
-
-      modalOverlay.querySelectorAll('.st-swipe-action-move-down').forEach(el => {
-        el.addEventListener('click', async (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          if (el.hasAttribute('disabled')) return;
-
-          const idx = parseInt(el.getAttribute('data-idx') || '0', 10);
-          if (idx >= swipes.length - 1) return;
-
-          try {
-            await moveSwipeOrder(idx, idx + 1);
-            await refreshModalList({ focusIdx: idx + 1 });
-          } catch (err) {
-            console.error('[Swipe Previewer] move swipe down failed', err);
-            window.toastr?.error?.('下移分支失败');
-          }
-        });
-      });
-
-      modalOverlay.querySelectorAll('.st-swipe-action-delete').forEach(el => {
-        el.addEventListener('click', async (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-
-          const idx = parseInt(el.getAttribute('data-idx') || '0', 10);
-          try {
-            const deleted = await deleteSwipe(idx);
-            if (!deleted) return;
-            await refreshModalList({ focusIdx: idx });
-          } catch (err) {
-            console.error('[Swipe Previewer] delete swipe failed', err);
-            window.toastr?.error?.('删除分支失败');
-          }
-        });
-      });
-
-      // 卡片点击：仅用于便捷滚动定位
-      modalOverlay.querySelectorAll('.st-swipe-card').forEach(el => {
-        el.addEventListener('click', () => {
-          const idx = parseInt(el.getAttribute('data-idx') || '0', 10);
-          currentViewIdx = idx;
-        });
-      });
-
-      // 单卡：渲染预览开关（覆盖全局）
-      modalOverlay.querySelectorAll('.st-swipe-action-render-one').forEach((btn) => {
-        btn.addEventListener('click', (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          const idx = parseInt(btn.getAttribute('data-idx') || '0', 10);
-          const current = renderPreviewByIdx.has(idx) ? !!renderPreviewByIdx.get(idx) : getEffectiveRender(idx);
-          renderPreviewByIdx.set(idx, !current);
-          renderCard(idx);
-          updateRenderButtonStates();
-        });
-      });
+      // Delegate below: no per-card listeners are needed after list rebuilds.
     }
 
+    modalOverlay.addEventListener('click', event => {
+      const target = event.target.closest('[data-idx], [data-selection]');
+      if (!target || busy) return;
+      const action = target.dataset.selection;
+      if (action) {
+        if (!selectionMode || target.disabled) return;
+        if (action === 'exit') return setSelectionMode(false);
+        if (action === 'delete') {
+          void withMutation(async () => {
+            if (await deleteSelectedSwipes([...selected])) await refreshModalList();
+          });
+          return;
+        }
+        if (action === 'invert') {
+          swipes.forEach((_, idx) => {
+            if (selected.has(idx)) selected.delete(idx);
+            else selected.add(idx);
+          });
+        } else {
+          selected.clear();
+          if (action === 'all' || action === 'others') swipes.forEach((_, i) => {
+            if (action === 'all' || i !== currentSwipeId) selected.add(i);
+          });
+        }
+        updateSelection();
+        return;
+      }
+      const idx = Number(target.dataset.idx);
+      if (target.classList.contains('st-swipe-jump-item')) {
+        if (selectionMode) {
+          if (selected.has(idx)) selected.delete(idx);
+          else selected.add(idx);
+          updateSelection();
+        } else scrollToIdx(idx);
+        return;
+      }
+      currentViewIdx = idx;
+      if (target.classList.contains('st-swipe-action-render-one')) {
+        renderPreviewByIdx.set(idx, !getEffectiveRender(idx));
+        renderCard(idx);
+        updateRenderButtonStates();
+        return;
+      }
+      if (!target.matches('button:not([disabled])')) return;
+      event.preventDefault();
+      void withMutation(async () => {
+        if (target.classList.contains('st-swipe-action-switch')) return jumpToSwipe(idx);
+        if (target.classList.contains('st-swipe-action-branch')) return createBranchFromSwipe(idx);
+        if (target.classList.contains('st-swipe-action-edit')) {
+          if (await editSwipe(idx)) {
+            await refreshModalList({ focusIdx: idx });
+            // Saving replaces the card DOM after the editor's return-focus microtask.
+            // Reacquire its control, but never take focus from a newer overlay/chat.
+            if (!closed && isTopSwipeOverlay(modalOverlay)) {
+              modalOverlay.querySelector(`.st-swipe-card[data-idx="${idx}"] .st-swipe-action-edit`)?.focus({ preventScroll: true });
+            }
+          }
+
+        } else if (target.classList.contains('st-swipe-action-move-up') || target.classList.contains('st-swipe-action-move-down')) {
+          const next = idx + (target.classList.contains('st-swipe-action-move-up') ? -1 : 1);
+          await moveSwipeOrder(idx, next);
+          await refreshModalList({ focusIdx: next });
+        }
+      });
+    });
+
+    // Register lifecycle handlers before the first asynchronous render.
+    const previewObserver = new MutationObserver(() => { if (!modalOverlay.isConnected) closeModal(); });
+    previewObserver.observe(document.body, { childList: true });
+    closeActivePreview = closeModal;
+    const eventBindings = [];
+    const bindChatEvent = (name, handler) => {
+      const type = eventTypes?.[name];
+      if (!type) return;
+      originContext.eventSource.on(type, handler);
+      eventBindings.push([type, handler]);
+    };
+    bindChatEvent('CHAT_CHANGED', closeModal);
+    bindChatEvent('GENERATION_STARTED', closeModal);
+    const onExternalUpdate = () => {
+      if (busy || closed) return;
+      // Index-based selection must never survive externally reordered/removed messages.
+      closeModal();
+    };
+    for (const name of ['MESSAGE_SWIPED', 'MESSAGE_UPDATED', 'MESSAGE_EDITED', 'MESSAGE_DELETED', 'MESSAGE_SWIPE_DELETED']) bindChatEvent(name, onExternalUpdate);
+
+    modalOverlay.querySelector(`#${modalId}-delete-mode`)?.addEventListener('click', () => {
+      if (!busy) setSelectionMode(!selectionMode);
+    });
+    modalOverlay.querySelector(`#${modalId}-tree`)?.addEventListener('click', () => {
+      if (busy || closed) return;
+      void openBranchTree({ mesId, swipeIdx: currentViewIdx, source: modalOverlay,
+        isValid: () => !closed && modalOverlay.isConnected });
+    });
+
+    // Bind dismissal before any initial async rendering/import can stall.
+    modalOverlay.querySelector(`#${modalId}-close`)?.addEventListener('click', closeModal);
+    modalOverlay.addEventListener('click', (e) => { if (e.target === modalOverlay) closeModal(); });
+    const releaseFocus = manageOverlayFocus(modalOverlay, {
+      initialFocus: modalOverlay.querySelector(`#${modalId}-close`), returnFocus,
+      onEscape: onKeydown,
+      canRestore: () => {
+        const context = window.SillyTavern?.getContext?.();
+        return context?.chat === originChat && context?.chatId === originChatId && context?.chat?.[mesId] === originMessage;
+      },
+    });
+
     // 初次打开预览：按当前设置决定是否应用正则，并渲染列表
-    await refreshModalList({ keepScroll: false });
+    try {
+      await refreshModalList({ focusIdx: currentViewIdx });
+    } catch (error) {
+      closeModal();
+      throw error;
+    }
+    if (closed) return;
 
     modalOverlay.querySelector(`#${modalId}-prev`)?.addEventListener('click', () => scrollToIdx(Math.max(0, currentViewIdx - 1)));
     modalOverlay.querySelector(`#${modalId}-next`)?.addEventListener('click', () => scrollToIdx(Math.min(Math.max(swipes.length - 1, 0), currentViewIdx + 1)));
-    modalOverlay.querySelector(`#${modalId}-toggle`)?.addEventListener('click', () => modalOverlay.querySelector(`#${modalId}-jump-list`)?.classList.toggle('hidden'));
+    modalOverlay.querySelector(`#${modalId}-toggle`)?.addEventListener('click', () => {
+      if (!selectionMode) jumpListEl.classList.toggle('hidden');
+    });
 
     // 右上角：渲染预览（全局开关）
     modalOverlay.querySelector(`#${modalId}-render`)?.addEventListener('click', () => {
@@ -1441,6 +1495,7 @@
       e.preventDefault();
       e.stopPropagation();
       showSettingsModal({
+        returnFocus: modalOverlay.querySelector(`#${modalId}-settings`),
         onSettingsChanged: async () => {
           // 让设置开关即时生效（无需关闭重开预览窗口）
           // - 文本 Markdown：直接重渲染
@@ -1455,18 +1510,27 @@
 
     // 绑定关闭逻辑
     function closeModal() {
+      if (closed) return;
+      closed = true;
+      cancelEdit?.();
+      releaseFocus();
+      previewObserver.disconnect();
+      if (closeActivePreview === closeModal) closeActivePreview = null;
+      for (const [type, handler] of eventBindings) originContext.eventSource.removeListener(type, handler);
       modalOverlay.remove();
-      window.removeEventListener('keydown', onKeydown);
       window.removeEventListener('message', onIframeMessage);
     }
 
     function onKeydown(e) {
-      if (e.key === 'Escape') closeModal();
+      if (e.key === 'Escape' && isTopSwipeOverlay(modalOverlay)) {
+        if (selectionMode && !busy) {
+          e.preventDefault();
+          setSelectionMode(false);
+          modalOverlay.querySelector(`#${modalId}-delete-mode`)?.focus();
+        } else if (!busy) closeModal();
+      }
     }
 
-    modalOverlay.querySelector(`#${modalId}-close`)?.addEventListener('click', closeModal);
-    modalOverlay.addEventListener('click', (e) => { if (e.target === modalOverlay) closeModal(); });
-    window.addEventListener('keydown', onKeydown);
   }
 
   init();

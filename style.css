@@ -1,21 +1,45 @@
+@import url('./timeline.css');
+
+/* SillyTavern 主题桥接：无宿主变量时使用系统颜色，不强制深色。 */
+:root {
+  --st-swipe-surface: var(--SmartThemeBlurTintColor, Canvas);
+  --st-swipe-text: var(--SmartThemeBodyColor, CanvasText);
+  --st-swipe-muted: var(--SmartThemeEmColor, GrayText);
+  --st-swipe-border: var(--SmartThemeBorderColor, GrayText);
+  --st-swipe-accent: var(--SmartThemeQuoteColor, Highlight);
+  /* 宿主默认焦点色固定为白色；改用主题正文色兼容浅色主题。 */
+  --st-swipe-focus: var(--st-swipe-text);
+  --st-swipe-shadow: var(--SmartThemeShadowColor, transparent);
+  --st-swipe-soft: color-mix(in srgb, var(--st-swipe-text) 5%, transparent);
+  --st-swipe-hover: color-mix(in srgb, var(--st-swipe-text) 12%, transparent);
+  --st-swipe-selected: color-mix(in srgb, var(--st-swipe-accent) 12%, transparent);
+}
+
 /* 遮罩层 */
 .st-swipe-modal-overlay {
   position: fixed;
   top: 0;
   left: 0;
-  width: 100vw;
+  width: 100%;
   height: 100vh;
-  background: rgba(0, 0, 0, 0.7);
+  height: 100dvh;
+  padding: max(8px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+  background: var(--SmartThemeShadowColor, transparent);
+  color: var(--st-swipe-text);
   display: flex;
   justify-content: center;
   align-items: center;
   z-index: 10000;
-  backdrop-filter: blur(4px);
-  font-family: var(--main-font, sans-serif);
+  backdrop-filter: blur(var(--SmartThemeBlurStrength, 4px));
+  -webkit-backdrop-filter: blur(var(--SmartThemeBlurStrength, 4px));
+  font-family: var(--mainFontFamily, sans-serif);
+  font-size: var(--mainFontSize, 1rem);
   box-sizing: border-box;
   /* 防止移动端滚动“传导”到背景页面 */
   overscroll-behavior: contain;
 }
+
+.st-swipe-modal-overlay[hidden] { display: none; }
 
 .st-swipe-modal-overlay * {
   box-sizing: border-box;
@@ -23,25 +47,31 @@
 
 /* 容器 */
 .st-swipe-modal-container {
-  background: var(--mainColor, #222);
-  color: var(--text-color, white);
+  background: var(--st-swipe-surface);
+  color: var(--st-swipe-text);
   width: 85%;
   max-width: 900px;
   height: 85%;
   max-height: 85vh;
+  max-height: 85dvh;
+  min-width: 0;
+  min-height: 0;
   border-radius: 12px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid var(--SmartThemeBorderColor);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  border: 1px solid var(--st-swipe-border);
+  box-shadow: 0 10px 30px var(--st-swipe-shadow);
   margin: auto;
 }
 
 /* 头部 */
 .st-swipe-modal-header {
   padding: 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid var(--st-swipe-border);
+  max-height: 50%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
@@ -62,13 +92,16 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   flex: 1;
+  min-width: 0;
 }
 
 .st-swipe-header-ops {
   display: flex;
   gap: 4px;
   align-items: center;
-  flex-shrink: 0;
+  flex-shrink: 1;
+  flex-wrap: wrap;
+  min-width: 0;
 }
 
 /* 跳转列表 */
@@ -77,7 +110,7 @@
   flex-wrap: wrap;
   gap: 6px;
   padding: 0 16px 12px 16px;
-  transition: all 0.2s ease;
+  transition: background-color var(--animation-duration-2x, 0.2s) ease, border-color var(--animation-duration-2x, 0.2s) ease;
   overflow-y: auto;
   max-height: 120px;
   overscroll-behavior: contain;
@@ -94,23 +127,26 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--st-swipe-soft);
+  color: var(--st-swipe-text);
+  border: 1px solid var(--st-swipe-border);
   border-radius: 4px;
   cursor: pointer;
   font-size: 0.85em;
   flex-shrink: 0;
-  transition: all 0.2s ease;
+  transition: background-color var(--animation-duration-2x, 0.2s) ease, border-color var(--animation-duration-2x, 0.2s) ease;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
 }
 
 .st-swipe-jump-item:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--st-swipe-hover);
 }
 
 .st-swipe-jump-item.active {
-  background: #2ed573;
-  color: #000;
+  background: var(--st-swipe-selected);
+  color: var(--st-swipe-text);
+  border-color: var(--st-swipe-accent);
   font-weight: bold;
 }
 
@@ -119,42 +155,47 @@
   padding: 20px;
   overflow-y: auto;
   flex: 1;
+  min-height: 0;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 16px;
-  scroll-behavior: smooth;
+  scroll-behavior: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
 }
 
 .st-swipe-card {
   padding: 16px;
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--st-swipe-soft);
   border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--st-swipe-border);
   position: relative;
-  transition: all 0.2s ease;
+  transition: background-color var(--animation-duration-2x, 0.2s) ease, border-color var(--animation-duration-2x, 0.2s) ease;
   scroll-margin-top: 10px;
   width: 100%;
+  min-width: 0;
+  flex-shrink: 0;
+  overflow-wrap: anywhere;
 }
 
 .st-swipe-card.active {
-  border-color: #2ed573;
-  background: rgba(46, 213, 115, 0.08);
-  box-shadow: inset 0 0 10px rgba(46, 213, 115, 0.1);
+  border-color: var(--st-swipe-accent);
+  background: var(--st-swipe-selected);
+  box-shadow: inset 3px 0 0 var(--st-swipe-accent);
 }
 
 .st-swipe-card-badge {
   font-size: 0.75em;
   font-weight: bold;
-  opacity: 0.6;
+  color: var(--st-swipe-muted);
   margin-bottom: 0;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
 .st-swipe-card.active .st-swipe-card-badge {
-  color: #2ed573;
+  color: var(--st-swipe-accent);
   opacity: 1;
 }
 
@@ -163,7 +204,7 @@
   word-break: break-word;
   line-height: 1.6;
   font-size: 1.05em;
-  color: var(--text-color, #eee);
+  color: var(--st-swipe-text);
 }
 
 /* 卡片头部（badge + 操作按钮同一行） */
@@ -173,6 +214,8 @@
   justify-content: space-between;
   gap: 10px;
   margin-bottom: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
 }
 
 .st-swipe-card-badge {
@@ -180,7 +223,8 @@
   align-items: center;
   gap: 8px;
   margin-bottom: 0;
-
+  min-width: 0;
+  flex-wrap: wrap;
 }
 
 .st-swipe-card-badge .st-swipe-action-render-one {
@@ -198,6 +242,8 @@
   gap: 8px;
   flex-wrap: wrap;
   margin-bottom: 0;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .st-swipe-action-switch,
@@ -211,13 +257,14 @@
 }
 
 .st-swipe-action-delete {
-  color: #ff9f9f;
-  border-color: rgba(255, 107, 107, 0.45);
+  color: var(--st-swipe-text);
+  border-color: var(--st-swipe-accent);
+  border-style: dashed;
 }
 
 .st-swipe-action-delete:hover:not(:disabled) {
-  background: rgba(255, 107, 107, 0.12);
-  border-color: rgba(255, 107, 107, 0.75);
+  background: var(--st-swipe-selected);
+  border-color: var(--st-swipe-accent);
 }
 
 .st-swipe-card-actions .menu_button:disabled {
@@ -235,10 +282,10 @@
   max-height: 58vh;
   resize: vertical;
   border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  background: rgba(0, 0, 0, 0.25);
-  color: var(--text-color, #eee);
-  font-family: var(--main-font, sans-serif);
+  border: 1px solid var(--st-swipe-border);
+  background: var(--st-swipe-surface);
+  color: var(--st-swipe-text);
+  font-family: var(--mainFontFamily, sans-serif);
   line-height: 1.6;
   font-size: 1em;
   padding: 10px 12px;
@@ -251,7 +298,7 @@
 }
 
 .st-swipe-edit-save {
-  outline: 1px solid rgba(46, 213, 115, 0.65);
+  border-color: var(--st-swipe-accent);
 }
 
 /* 卡片正文：文本/iframe 二选一 */
@@ -263,9 +310,9 @@
   display: none;
   width: 100%;
   min-height: 160px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--st-swipe-border);
   border-radius: 8px;
-  background: #111;
+  background: var(--st-swipe-surface);
   overflow: hidden;
 }
 
@@ -275,34 +322,35 @@
    * 1) 未开启 iframe 渲染预览时的“文本 Markdown”样式
    * 2) 开启 iframe 渲染预览时，JS 会读取该变量并注入到 srcdoc 的 <style> 中
    */
-  --st-swipe-previewer-md-em-color: #67c5ff;
-  --st-swipe-previewer-md-strong-color: #ffa011;
+  --st-swipe-previewer-md-em-color: var(--SmartThemeEmColor, GrayText);
+  --st-swipe-previewer-md-strong-color: var(--SmartThemeBodyColor, CanvasText);
 
   /* 引号高亮（基础色 + 背景） */
-  --st-swipe-previewer-md-quote-color: #7dd3fc;
-  --st-swipe-previewer-md-quote-bg: rgba(125, 211, 252, 0.10);
+  --st-swipe-previewer-md-quote-color: var(--st-swipe-accent);
+  --st-swipe-previewer-md-quote-bg: var(--st-swipe-selected);
 
   /* 可选：不同引号类型的强调色（仅主页面文本模式使用；iframe 仍使用基础色） */
-  --st-swipe-previewer-md-quote-color-cn: #7dd3fc;
+  --st-swipe-previewer-md-quote-color-cn: var(--st-swipe-accent);
   /* “中文双引号” */
-  --st-swipe-previewer-md-quote-color-en: #a7f3d0;
+  --st-swipe-previewer-md-quote-color-en: var(--st-swipe-accent);
   /* "英文双引号" */
-  --st-swipe-previewer-md-quote-color-jp: #fbcfe8;
+  --st-swipe-previewer-md-quote-color-jp: var(--st-swipe-accent);
   /* 「日文钩引号」 */
-  --st-swipe-previewer-md-quote-color-jp2: #fde68a;
+  --st-swipe-previewer-md-quote-color-jp2: var(--st-swipe-accent);
   /* 『日文双钩引号』 */
 
   /* 删除线 */
-  --st-swipe-previewer-md-del-line: rgba(255, 107, 107, 0.95);
-  --st-swipe-previewer-md-del-bg: rgba(255, 107, 107, 0.08);
+  --st-swipe-previewer-md-del-line: var(--st-swipe-muted);
+  --st-swipe-previewer-md-del-bg: var(--st-swipe-soft);
 
   /* 引用块 */
-  --st-swipe-previewer-md-blockquote-bg: rgba(255, 255, 255, 0.03);
+  --st-swipe-previewer-md-blockquote-bg: var(--st-swipe-soft);
 }
 
 .st-swipe-md-root {
   font-size: 1.05em;
-  color: #eee;
+  color: var(--st-swipe-text);
+  overflow-wrap: anywhere;
   line-height: 1.6;
 }
 
@@ -340,18 +388,18 @@
 
 .st-swipe-md-root em {
   opacity: 0.95;
-  color: var(--st-swipe-previewer-md-em-color, #67c5ff);
+  color: var(--st-swipe-previewer-md-em-color, var(--st-swipe-muted));
 }
 
 .st-swipe-md-root strong {
   font-weight: 700;
-  color: var(--st-swipe-previewer-md-strong-color, #ffa011);
+  color: var(--st-swipe-previewer-md-strong-color, var(--st-swipe-text));
 }
 
 /* 引号高亮（中文/英文/『』/「」） */
 .st-swipe-md-root .st-swipe-quote {
-  color: var(--st-swipe-previewer-md-quote-color, #7dd3fc);
-  background: var(--st-swipe-previewer-md-quote-bg, rgba(125, 211, 252, 0.10));
+  color: var(--st-swipe-previewer-md-quote-color, var(--st-swipe-accent));
+  background: var(--st-swipe-previewer-md-quote-bg, var(--st-swipe-selected));
   padding: 0 3px;
   border-radius: 4px;
 }
@@ -359,28 +407,28 @@
 /* 不同引号类型：给一点“独特颜色”，增强可读性 */
 .st-swipe-md-root .st-swipe-quote.q-cn-double,
 .st-swipe-md-root .st-swipe-quote.q-cn-single {
-  color: var(--st-swipe-previewer-md-quote-color-cn, #7dd3fc);
+  color: var(--st-swipe-previewer-md-quote-color-cn, var(--st-swipe-accent));
 }
 
 .st-swipe-md-root .st-swipe-quote.q-en-double,
 .st-swipe-md-root .st-swipe-quote.q-en-single {
-  color: var(--st-swipe-previewer-md-quote-color-en, #a7f3d0);
+  color: var(--st-swipe-previewer-md-quote-color-en, var(--st-swipe-accent));
 }
 
 .st-swipe-md-root .st-swipe-quote.q-jp-kagi {
-  color: var(--st-swipe-previewer-md-quote-color-jp, #fbcfe8);
+  color: var(--st-swipe-previewer-md-quote-color-jp, var(--st-swipe-accent));
 }
 
 .st-swipe-md-root .st-swipe-quote.q-jp-doublekagi {
-  color: var(--st-swipe-previewer-md-quote-color-jp2, #fde68a);
+  color: var(--st-swipe-previewer-md-quote-color-jp2, var(--st-swipe-accent));
 }
 
 /* 删除线：让“线”和背景更明显一点 */
 .st-swipe-md-root del {
-  background: var(--st-swipe-previewer-md-del-bg, rgba(255, 107, 107, 0.08));
+  background: var(--st-swipe-previewer-md-del-bg, var(--st-swipe-soft));
   border-radius: 4px;
   padding: 0 2px;
-  text-decoration-color: var(--st-swipe-previewer-md-del-line, rgba(255, 107, 107, 0.95));
+  text-decoration-color: var(--st-swipe-previewer-md-del-line, var(--st-swipe-muted));
 }
 
 .st-swipe-md-root pre {
@@ -389,8 +437,8 @@
   overflow-x: hidden;
   overflow-y: auto;
   padding: 8px 10px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.10);
+  background: var(--st-swipe-soft);
+  border: 1px solid var(--st-swipe-border);
   border-radius: 6px;
   margin: 6px 0;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
@@ -402,7 +450,7 @@
   white-space: pre-wrap;
   word-break: break-word;
   overflow-wrap: anywhere;
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--st-swipe-hover);
   padding: 0 4px;
   border-radius: 4px;
 }
@@ -415,17 +463,17 @@
 }
 
 .st-swipe-md-root blockquote {
-  border-left: 3px solid rgba(255, 255, 255, 0.25);
+  border-left: 3px solid var(--st-swipe-accent);
   margin: 8px 0;
   padding: 8px 10px;
   border-radius: 8px;
-  background: var(--st-swipe-previewer-md-blockquote-bg, rgba(255, 255, 255, 0.03));
+  background: var(--st-swipe-previewer-md-blockquote-bg, var(--st-swipe-soft));
   opacity: 0.95;
 }
 
 .st-swipe-md-root hr {
   border: 0;
-  border-top: 1px solid rgba(255, 255, 255, 0.18);
+  border-top: 1px solid var(--st-swipe-border);
   margin: 12px 0;
 }
 
@@ -448,28 +496,30 @@
 
 .st-swipe-header-ops .menu_button.active,
 .st-swipe-action-render-one.active {
-  outline: 1px solid rgba(46, 213, 115, 0.8);
-  box-shadow: inset 0 0 0 1px rgba(46, 213, 115, 0.25);
+  border-color: var(--st-swipe-accent);
+  box-shadow: inset 0 0 0 1px var(--st-swipe-accent);
 }
 
 /* 设置面板 */
 .st-swipe-setting-grid {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
 }
 
 .st-swipe-setting-card {
   display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
   padding: 12px 14px;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--st-swipe-soft);
+  border: 1px solid var(--st-swipe-border);
   cursor: pointer;
 }
 
 .st-swipe-setting-card:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--st-swipe-hover);
 }
 
 .st-swipe-setting-card-head {
@@ -502,8 +552,326 @@
 
 @media (min-width: 720px) {
   .st-swipe-setting-grid {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+}
+
+/* 宿主 menu_button 保留颜色/边框约定，仅修正模态内的尺寸和交互。 */
+.st-swipe-modal-overlay .menu_button {
+  width: auto;
+  max-width: 100%;
+  min-height: 32px;
+  margin: 0;
+  gap: 6px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.st-swipe-modal-overlay .menu_button:not(.disabled):not([disabled]):hover {
+  background-color: var(--st-swipe-hover);
+}
+
+.st-swipe-modal-overlay .menu_button:not(.disabled):not([disabled]).active {
+  background-color: var(--st-swipe-selected);
+  border-color: var(--st-swipe-accent);
+}
+
+.st-swipe-modal-overlay :is(button, .menu_button):disabled,
+.st-swipe-modal-overlay .menu_button.disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.st-swipe-modal-overlay :is(button, .menu_button, input, textarea, select, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--st-swipe-focus);
+  outline-offset: 2px;
+}
+
+.st-swipe-setting-card:focus-within {
+  outline: 2px solid var(--st-swipe-focus);
+  outline-offset: 2px;
+}
+
+.st-swipe-modal-overlay [hidden] {
+  display: none !important;
+}
+
+body.no-blur .st-swipe-modal-overlay {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+/* 批量选择：与当前 swipe (.active) 分开标记。 */
+.st-swipe-selection-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 16px 12px;
+  min-width: 0;
+}
+
+.st-swipe-selection-toolbar button {
+  flex: 0 1 auto;
+  min-width: 0;
+  min-height: 32px;
+  margin: 0;
+  padding: 5px 10px;
+  border: 1px solid var(--st-swipe-border);
+  border-radius: 5px;
+  background-color: var(--st-swipe-surface);
+  color: var(--st-swipe-text);
+  font: inherit;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.st-swipe-selection-toolbar button:hover:not(:disabled) {
+  background-color: var(--st-swipe-hover);
+}
+
+.st-swipe-selection-count {
+  margin-inline-start: auto;
+  min-width: 0;
+  color: var(--st-swipe-text);
+  font-size: 0.9em;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+/* 编号导航承担选择，当前标记与待删标记可同时显示。 */
+.st-swipe-jump-item {
+  position: relative;
+  appearance: none;
+  font-family: inherit;
+  line-height: 1;
+  flex-shrink: 0;
+  margin: 0;
+  padding: 2px;
+}
+
+.st-swipe-jump-item.active::before {
+  content: '●';
+  position: absolute;
+  bottom: 1px;
+  left: 3px;
+  font-size: 7px;
+  color: var(--st-swipe-accent);
+}
+
+.st-swipe-jump-item.selected {
+  border-color: var(--st-swipe-text);
+  background: var(--st-swipe-hover);
+  outline: 1px solid var(--st-swipe-text);
+  outline-offset: -3px;
+}
+
+.st-swipe-jump-item.selected::after {
+  content: '✓';
+  position: absolute;
+  top: 0;
+  right: 1px;
+  font-size: 9px;
+  font-weight: bold;
+}
+
+.st-swipe-jump-item.active.selected {
+  border-color: var(--st-swipe-accent);
+  box-shadow: inset 0 -3px 0 var(--st-swipe-accent);
+}
+
+.st-swipe-selection-mode .st-swipe-jump-item {
+  width: 36px;
+  height: 36px;
+}
+
+.st-swipe-selection-hint,
+.st-swipe-selection-legend {
+  flex: 1 0 100%;
+  font-size: 0.85em;
+  color: var(--st-swipe-muted);
+  overflow-wrap: anywhere;
+}
+
+.st-swipe-selection-legend {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.st-swipe-selection-legend > :first-child { color: var(--st-swipe-accent); }
+.st-swipe-selection-legend > :nth-child(2) { color: var(--st-swipe-text); }
+.st-swipe-header-ops [aria-disabled="true"] { opacity: 0.45; cursor: not-allowed; }
+
+/* 树状预览：复用模态头部，内容区负责滚动，长标题不撑宽容器。 */
+.st-swipe-tree-overlay .st-swipe-modal-container {
+  max-width: 1000px;
+}
+
+.st-swipe-tree-overlay .st-swipe-title {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.st-swipe-tree-overlay .st-swipe-modal-content {
+  gap: 12px;
+}
+
+.st-swipe-tree-summary {
+  flex-shrink: 0;
+  color: var(--st-swipe-muted);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.st-swipe-tree-search.text_pole {
+  display: block;
+  flex-shrink: 0;
+  width: 100%;
+  min-width: 0;
+  min-height: 36px;
+  margin: 0;
+  padding: 8px 10px;
+  background-color: var(--st-swipe-surface);
+  color: var(--st-swipe-text);
+  border-color: var(--st-swipe-border);
+  font: inherit;
+}
+
+.st-swipe-tree-search::placeholder {
+  color: var(--st-swipe-muted);
+  opacity: 1;
+}
+
+.st-swipe-tree-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  flex-shrink: 0;
+}
+
+.st-swipe-tree-floor {
+  min-width: 0;
+  border: 1px solid var(--st-swipe-border);
+  border-radius: 8px;
+  background: var(--st-swipe-soft);
+}
+
+.st-swipe-tree-floor > summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 12px;
+  min-width: 0;
+  min-height: 44px;
+  border-radius: 8px;
+  color: var(--st-swipe-text);
+  font-weight: 600;
+  line-height: 1.5;
+  list-style: none;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.st-swipe-tree-floor > summary::-webkit-details-marker {
+  display: none;
+}
+
+.st-swipe-tree-floor > summary::before {
+  content: "";
+  width: 0.5em;
+  height: 0.5em;
+  flex: 0 0 auto;
+  margin-inline-end: 4px;
+  border-inline-end: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(-45deg);
+}
+
+.st-swipe-tree-floor[open] > summary::before {
+  transform: rotate(45deg);
+}
+
+.st-swipe-tree-floor > summary:hover {
+  background: var(--st-swipe-hover);
+}
+
+.st-swipe-tree-floor > summary > span {
+  min-width: 0;
+  flex: 1 1 12em;
+  overflow-wrap: anywhere;
+}
+
+.st-swipe-tree-floor > summary > .menu_button {
+  flex: 0 1 auto;
+  margin-inline-start: auto;
+  font-weight: normal;
+}
+
+.st-swipe-tree-branches {
+  list-style: none;
+  margin-block: 0 12px;
+  margin-inline: 24px 12px;
+  padding-block: 0;
+  padding-inline: 16px 0;
+  border-inline-start: 1px solid var(--st-swipe-border);
+  min-width: 0;
+}
+
+.st-swipe-tree-branches > li {
+  position: relative;
+  list-style: none;
+  min-width: 0;
+  margin: 0;
+  padding: 6px 0;
+}
+
+.st-swipe-tree-branches > li::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: -16px;
+  top: 24px;
+  width: 16px;
+  border-top: 1px solid var(--st-swipe-border);
+}
+
+.st-swipe-tree-branches .st-swipe-tree-preview.menu_button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 4px;
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 8px 10px;
+  color: var(--st-swipe-text);
+  font-family: var(--mainFontFamily, sans-serif);
+  font-size: 1em;
+  line-height: 1.5;
+  text-align: start;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.st-swipe-tree-preview.menu_button.active {
+  border-color: var(--st-swipe-accent);
+  box-shadow: inset 3px 0 0 var(--st-swipe-accent);
+  font-weight: 600;
+}
+
+.st-swipe-tree-snippet {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  color: var(--st-swipe-muted);
+  font-size: 0.9em;
+  font-weight: normal;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 /* 移动端适配 */
@@ -512,6 +880,7 @@
     width: 95%;
     height: 95%;
     max-height: 95vh;
+    max-height: 95dvh;
     border-radius: 8px;
   }
 
@@ -567,10 +936,11 @@
   }
 
   .st-swipe-header-ops .menu_button {
-    width: 30px;
-    height: 30px;
-    font-size: 0.8em;
-    padding: 4px !important;
+    width: auto;
+    min-width: 36px;
+    min-height: 36px;
+    font-size: 0.9em;
+    padding: 6px;
   }
 
   .st-swipe-jump-list {
@@ -579,8 +949,8 @@
   }
 
   .st-swipe-jump-item {
-    width: 28px;
-    height: 28px;
+    width: 36px;
+    height: 36px;
     font-size: 0.75em;
   }
 
@@ -591,5 +961,51 @@
   }
   .st-swipe-edit-actions button {
     flex: 1;
+  }
+
+  .st-swipe-title {
+    max-width: 100%;
+  }
+
+  .st-swipe-selection-toolbar {
+    gap: 6px;
+    padding: 0 12px 10px;
+  }
+
+  .st-swipe-selection-toolbar button {
+    flex: 1 1 auto;
+    min-height: 40px;
+  }
+
+  .st-swipe-selection-count {
+    flex-basis: 100%;
+    margin-inline-start: 0;
+  }
+
+
+  .st-swipe-tree-floor > summary {
+    padding: 8px;
+  }
+
+  .st-swipe-tree-branches {
+    margin-inline-start: 14px;
+    margin-inline-end: 8px;
+    padding-inline-start: 12px;
+  }
+
+  .st-swipe-tree-branches > li::before {
+    inset-inline-start: -12px;
+    width: 12px;
+  }
+}
+
+/* 系统减少动态效果首选项也适用于跳转和控件。 */
+@media (prefers-reduced-motion: reduce) {
+  .st-swipe-modal-overlay *,
+  .st-swipe-modal-overlay *::before,
+  .st-swipe-modal-overlay *::after {
+    scroll-behavior: auto;
+    transition: none;
+    animation: none;
   }
 }
