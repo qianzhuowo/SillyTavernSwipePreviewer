@@ -255,6 +255,17 @@ export function installNativeMessageButtons({ document, eventSource, eventTypes,
         subscriptions.push([event, handler]);
     }
 
+    const surface = globalThis.__TAURITAVERN__?.api?.chatSurface;
+    if (surface?.isManagedOwnershipRequired?.() === true) {
+        surface.registerParticipant({
+            id: 'swipe-previewer/message-buttons', protocolVersion: 1,
+            didMount({ element }) {
+                if (disposed) return;
+                syncMessage(element);
+                return () => element.querySelectorAll(PREVIEW_BUTTON_SELECTOR).forEach(button => button.remove());
+            },
+        });
+    }
     for (const name of ['APP_READY', 'CHAT_CHANGED', 'MORE_MESSAGES_LOADED', 'MESSAGE_DELETED']) subscribe(name, sync);
     for (const name of ['USER_MESSAGE_RENDERED', 'CHARACTER_MESSAGE_RENDERED', 'MESSAGE_UPDATED', 'MESSAGE_SWIPED']) subscribe(name, syncRendered);
     document.addEventListener('click', activate);

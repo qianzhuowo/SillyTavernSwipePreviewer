@@ -1,3 +1,4 @@
+import { getAnnotation, annotationSearchText } from './annotations.mjs';
 // Lightweight floor index. No per-swipe objects or normalized bodies live in the global index.
 import { countSwipes, currentSwipe, snippet, branchText, CURRENT_SELECTION, CANDIDATE_UNKNOWN } from './timeline-graph.mjs';
 const W = 224, H = 116, STEP = 260, PAD = 44;
@@ -41,8 +42,9 @@ export class TimelineIndex {
         const [mesId, swipeIdx] = String(id).split(':').map(Number), floor = this.byId.get(mesId);
         if (!floor || !Number.isInteger(swipeIdx) || swipeIdx < 0 || swipeIdx >= floor.count) return null;
         const isCurrent = swipeIdx === floor.currentSwipe;
+        const annotation = getAnnotation(this.chat[mesId], swipeIdx);
         return { ...floor, id: `${mesId}:${swipeIdx}`, swipeIdx, isCurrent,
-            label: `#${mesId} 分支${swipeIdx + 1}`, summary: snippet(branchText(this.chat[mesId], swipeIdx)) };
+            label: `#${mesId} 分支${swipeIdx + 1}${annotation.favorite ? " ★" : ""}${annotation.name ? ` · ${annotation.name}` : ""}`, summary: snippet(annotation.note || branchText(this.chat[mesId], swipeIdx)) };
     }
 }
 export function createTimelineIndex(chat) {
@@ -205,17 +207,18 @@ export class TimelineSearch {
         }
         return text;
     }
-    async search(query, { current = () => true, visible = () => true, floors = this.index.floors } = {}) {
+    async search(query, { current = () => true, visible = () => true, floors = this.index.floors, favoritesOnly = false } = {}) {
         const run = ++this.run, valid = () => run === this.run && current();
         query = query.trim().toLowerCase();
         const matches = [], all = new Set(); let hidden = 0, deadline = this.now() + this.sliceMs;
-        if (!query) return { matches, all, hidden };
+        if (!query && !favoritesOnly) return { matches, all, hidden };
         for (const floor of floors) {
             for (let swipe = 0; swipe < floor.count; swipe++) {
                 if (!valid()) return null;
                 const id = `${floor.mesId}:${swipe}`;
+                if (favoritesOnly && !getAnnotation(this.index.chat[floor.mesId], swipe).favorite) continue;
                 const metadata = `#${floor.mesId} 分支${swipe + 1} 楼层 ${floor.mesId} ${floor.name} ${floor.role}`.toLowerCase();
-                let match = metadata.includes(query);
+                let match = metadata.includes(query) || annotationSearchText(this.index.chat[floor.mesId], swipe).toLowerCase().includes(query);
                 const raw = branchText(this.index.chat[floor.mesId], swipe);
                 if (!match && raw.length <= 65536) match = this.normalized(floor, swipe).includes(query);
                 else if (!match) {

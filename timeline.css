@@ -3,6 +3,15 @@
   --st-swipe-char-color: #8b9dff;
   --st-swipe-user-color: #e7ad62;
 }
+#st-swipe-tree-modal[data-swipe-theme="light"] {
+  --st-swipe-char-color: #4b56a8;
+  --st-swipe-user-color: #a46016;
+  --st-swipe-timeline-grid: #cbd6e3;
+}
+#st-swipe-tree-modal[data-swipe-theme="light"] .st-swipe-timeline-detail-text { color: var(--st-swipe-text); background: #f1f5fa; border-color: var(--st-swipe-border); }
+#st-swipe-tree-modal[data-swipe-theme="light"] .st-swipe-timeline-detail-meta,
+#st-swipe-tree-modal[data-swipe-theme="light"] .st-swipe-timeline-reference-status { color: var(--st-swipe-muted); }
+
 #st-swipe-tree-modal .st-swipe-timeline-legend-char { color: var(--st-swipe-char-color); }
 #st-swipe-tree-modal .st-swipe-timeline-legend-user { color: var(--st-swipe-user-color); }
 #st-swipe-tree-modal .st-swipe-timeline-container {

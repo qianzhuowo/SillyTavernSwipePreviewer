@@ -1,5 +1,9 @@
-(async function () {
+const initialization = (async function () {
   const swipeData = await import('./swipe-data.mjs');
+  const settingsApi = await import('./settings.mjs');
+  const annotations = await import('./annotations.mjs');
+  const { editAnnotation } = await import('./annotation-editor.mjs');
+  const hostCompat = await import('./host-compat.mjs');
   const nativeApi = await import('/script.js');
   const { eventSource, event_types: nativeEventTypes } = await import('/scripts/events.js');
   const { installNativeMessageButtons, installNativeTreeEntry, getNativePreviewMessage, prepareOverlayKeyboard, manageOverlayFocus, isTopSwipeOverlay } = await import('./native-integration.mjs');
@@ -14,6 +18,14 @@
     const originMessage = originChat?.[fallbackId];
     try {
       const { showBranchTree } = await import('./branch-tree.js');
+      if (originChat?.some(message => message?.tt_swipe_cold)) {
+        window.toastr?.info?.('正在加载当前聊天的冷分支，首次打开时间线可能稍慢');
+        for (let id = 0; id < originChat.length; id++) {
+          const now = window.SillyTavern?.getContext?.();
+          if (now?.chat !== originChat || now?.chatId !== originChatId || (isValid && !isValid())) return;
+          if (originChat[id]?.tt_swipe_cold) await hostCompat.hydrateSwipes(nativeApi, id, () => window.SillyTavern?.getContext?.());
+        }
+      }
       const latest = window.SillyTavern?.getContext?.();
       if (latest?.chat !== originChat || latest?.chatId !== originChatId || (isValid && !isValid())) return;
       showBranchTree({
@@ -37,20 +49,14 @@
     }
   }
 
-  const SETTINGS_KEY = "st-swipe-previewer-settings";
-  const DEFAULT_SETTINGS = {
-    /** 将按钮移动到 ... 菜单（.extraMesButtons） */
-    moveButtonsToExtraMenu: false,
-    /** 预览时应用酒馆正则（AI 输出 placement=2） */
-    applyTavernRegex: false,
-    /** 未开启渲染预览（iframe）时，也以“轻量 Markdown”方式渲染文本（加粗/删除线/引用等 + 引号高亮） */
-    renderMarkdownInTextView: false,
-  };
-
-  let settings = loadSettings();
+  let settings = settingsApi.loadSettings();
   let nativeButtons;
 
   function init() {
+    eventSource.on(nativeEventTypes.APP_READY, () => {
+      settings = settingsApi.loadSettings();
+      applyButtonRegistration();
+    });
     nativeButtons = installNativeMessageButtons({
       document, eventSource, eventTypes: nativeEventTypes,
       getContext: () => window.SillyTavern?.getContext?.(),
@@ -65,21 +71,8 @@
     });
   }
 
-  function loadSettings() {
-    try {
-      const raw = localStorage.getItem(SETTINGS_KEY);
-      if (!raw) return { ...DEFAULT_SETTINGS };
-      const parsed = JSON.parse(raw);
-      return { ...DEFAULT_SETTINGS, ...(parsed || {}) };
-    } catch {
-      return { ...DEFAULT_SETTINGS };
-    }
-  }
-
   function saveSettings(next) {
-    settings = { ...DEFAULT_SETTINGS, ...(next || {}) };
-    try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); }
-    catch (error) { console.warn('[Swipe Previewer] 无法持久保存设置', error); }
+    settings = settingsApi.saveSettingsPatch(next);
     return settings;
   }
 
@@ -96,6 +89,7 @@
     const originMessage = originChat?.[mesId];
     const chatId = origin?.chatId;
     try {
+      await hostCompat.hydrateSwipes(nativeApi, mesId, () => window.SillyTavern?.getContext?.());
       const message = getNativePreviewMessage(origin, mesId);
       if (!message) return;
       const latest = window.SillyTavern?.getContext?.();
@@ -109,6 +103,7 @@
 
   function showSettingsModal(opts = {}) {
     const { onSettingsChanged, returnFocus } = opts || {};
+    settings = settingsApi.loadSettings();
 
     const modalId = "st-swipe-previewer-settings-modal";
     document.getElementById(modalId)?.remove();
@@ -161,6 +156,7 @@
     overlay.setAttribute('role', 'dialog');
     overlay.setAttribute('aria-modal', 'true');
     overlay.setAttribute('aria-label', '分支预览器设置');
+    settingsApi.installTheme(overlay);
     prepareOverlayKeyboard(overlay);
     document.body.appendChild(overlay);
     const releaseFocus = manageOverlayFocus(overlay, {
@@ -176,7 +172,7 @@
     const mdTextEl = overlay.querySelector(`#${modalId}-md-text`);
 
     moveEl?.addEventListener('change', async () => {
-      saveSettings({ ...settings, moveButtonsToExtraMenu: !!moveEl.checked });
+      saveSettings({ moveButtonsToExtraMenu: !!moveEl.checked });
       try {
         await applyButtonRegistration();
       } catch (e) {
@@ -186,13 +182,13 @@
     });
 
     regexEl?.addEventListener('change', async () => {
-      saveSettings({ ...settings, applyTavernRegex: !!regexEl.checked });
+      saveSettings({ applyTavernRegex: !!regexEl.checked });
       // 让“预览正则”开关能即时影响已经打开的预览窗口
       try { await onSettingsChanged?.(); } catch { }
     });
 
     mdTextEl?.addEventListener('change', () => {
-      saveSettings({ ...settings, renderMarkdownInTextView: !!mdTextEl.checked });
+      saveSettings({ renderMarkdownInTextView: !!mdTextEl.checked });
       try { onSettingsChanged?.(); } catch { }
     });
   }
@@ -201,6 +197,7 @@
    * 显示预览模态框
    */
   async function showModal(mesId, message, messageElement, focusIdx) {
+    settings = settingsApi.loadSettings();
     const modalId = "st-swipe-preview-modal";
     const returnFocus = messageElement?.querySelector('.st-swipe-previewer-button')
       ?? document.querySelector(`#chat .mes[mesid="${mesId}"] .st-swipe-previewer-button`)
@@ -279,6 +276,7 @@
     modalOverlay.setAttribute('role', 'dialog');
     modalOverlay.setAttribute('aria-modal', 'true');
     modalOverlay.setAttribute('aria-label', `消息 ${mesId} 的分支预览`);
+    settingsApi.installTheme(modalOverlay);
     prepareOverlayKeyboard(modalOverlay);
     document.body.appendChild(modalOverlay);
 
@@ -419,9 +417,24 @@
       jumpListEl.innerHTML = swipes.map((_, idx) => `
         <button type="button" class="st-swipe-jump-item ${idx === currentSwipeId ? 'active' : ''}" data-idx="${idx}" ${idx === currentSwipeId ? 'aria-current="true"' : ''}>${idx + 1}</button>
       `).join('');
+      jumpListEl.querySelectorAll('[data-idx]').forEach(button => {
+        const idx = Number(button.dataset.idx), a = annotations.getAnnotation(originMessage, idx);
+        button.title = [a.name || `分支 #${idx + 1}`, a.note].filter(Boolean).join(' — ');
+        if (a.favorite) button.append(' ★');
+        if (a.name) button.append(` · ${a.name}`);
+      });
     };
 
     const renderCardsMarkup = () => {
+      const escapeAttr = value => String(value ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+      const annotationMarkup = idx => {
+        const a = annotations.getAnnotation(originMessage, idx);
+        return `<div class="st-swipe-annotation-summary" data-annotation-idx="${idx}">
+          <span class="st-swipe-annotation-name">${escapeAttr(a.name || `分支 #${idx + 1}`)}</span>
+          ${a.favorite ? '<span class="st-swipe-favorite-indicator" title="已收藏">★</span>' : ''}
+          ${a.note ? `<span class="st-swipe-annotation-note">${escapeAttr(a.note)}</span>` : ''}
+        </div>`;
+      };
       if (!contentEl) return;
       if (!swipes.length) {
         contentEl.innerHTML = '<div class="st-swipe-loading">当前消息没有可展示的分支</div>';
@@ -433,6 +446,7 @@
             <div class="st-swipe-card-header">
               <div class="st-swipe-card-badge">
                 <span>分支 #${idx + 1} ${idx === currentSwipeId ? '(当前选中)' : ''}</span>
+                ${annotationMarkup(idx)}
                 <button class="menu_button st-swipe-action-render-one" data-idx="${idx}" title="单独开启/关闭渲染预览">
                   <i class="fa-solid fa-code"></i>
                 </button>
@@ -440,6 +454,8 @@
               <div class="st-swipe-card-actions">
                 <button class="menu_button st-swipe-action-switch" data-idx="${idx}">切换楼层内容</button>
                 <button class="menu_button st-swipe-action-branch" data-idx="${idx}">创建新存档</button>
+                <button class="menu_button st-swipe-action-annotate" data-idx="${idx}">命名/备注</button>
+                <button class="menu_button st-swipe-action-favorite ${annotations.getAnnotation(originMessage, idx).favorite ? 'active' : ''}" data-idx="${idx}" aria-pressed="${annotations.getAnnotation(originMessage, idx).favorite}">★</button>
                 <button class="menu_button st-swipe-action-edit" data-idx="${idx}">编辑分支</button>
                 <button class="menu_button st-swipe-action-move-up" data-idx="${idx}" ${idx === 0 ? 'disabled' : ''}>上移</button>
                 <button class="menu_button st-swipe-action-move-down" data-idx="${idx}" ${idx === swipes.length - 1 ? 'disabled' : ''}>下移</button>
@@ -1005,6 +1021,8 @@
       updateRenderButtonStates();
     };
 
+    modalOverlay.addEventListener('swipe-theme-change', () => { settings = settingsApi.loadSettings(); renderAllCards(); });
+
     const scrollToIdx = (idx, behavior = 'auto') => {
       if (!swipes.length) {
         currentViewIdx = 0;
@@ -1140,7 +1158,7 @@
         const event = eventName === 'MESSAGE_EDITED' ? eventTypes?.MESSAGE_UPDATED : eventTypes?.[eventName];
         if (event) await ctx.eventSource.emit(event, ...eventArgs);
         ensureIdentity();
-        swipeData.prepareSwipes(originMessage);
+        if (originMessage.swipes?.length) swipeData.prepareSwipes(originMessage);
         if (nativeApi.isChatSaving) throw new Error('酒馆正在保存其他修改，请稍后重试');
         await ctx.saveChat();
         const afterSave = window.SillyTavern.getContext();
@@ -1193,6 +1211,7 @@
     const jumpToSwipe = async (targetSwipeIdx) => {
       await applySwipeToChat(targetSwipeIdx);
       closeModal();
+      await hostCompat.locateBoundedMessage(nativeApi, mesId);
       // Do not jump to the bottom when changing an historical floor.
       document.querySelector(`#chat .mes[mesid="${mesId}"]`)?.scrollIntoView({ behavior: 'auto', block: 'center' });
     };
@@ -1288,6 +1307,7 @@
         editOverlay.setAttribute('role', 'dialog');
         editOverlay.setAttribute('aria-modal', 'true');
         editOverlay.setAttribute('aria-label', `编辑分支 ${idx + 1}`);
+        settingsApi.installTheme(editOverlay);
         prepareOverlayKeyboard(editOverlay);
         document.body.appendChild(editOverlay);
 
@@ -1399,6 +1419,27 @@
         return;
       }
       currentViewIdx = idx;
+      if (target.classList.contains('st-swipe-action-favorite')) {
+        void withMutation(async () => {
+          const old = annotations.getAnnotation(originMessage, idx);
+          await commitMutation(message => annotations.setAnnotation(message, idx, { ...old, favorite: !old.favorite }), null);
+          await refreshModalList({ focusIdx: idx });
+        });
+        return;
+      }
+      if (target.classList.contains('st-swipe-action-annotate')) {
+        void withMutation(async () => {
+          const old = annotations.getAnnotation(originMessage, idx);
+          const editor = editAnnotation(old, { index: idx, returnFocus: () => modalOverlay.querySelector(`.st-swipe-action-annotate[data-idx="${idx}"]`) });
+          cancelEdit = editor.cancel;
+          const value = await editor.promise;
+          cancelEdit = null;
+          if (value === null) return;
+          await commitMutation(message => annotations.setAnnotation(message, idx, value), null);
+          await refreshModalList({ focusIdx: idx });
+        });
+        return;
+      }
       if (target.classList.contains('st-swipe-action-render-one')) {
         renderPreviewByIdx.set(idx, !getEffectiveRender(idx));
         renderCard(idx);
@@ -1535,3 +1576,6 @@
 
   init();
 })();
+
+// TT waits for this named hook before its first bounded chat projection.
+export async function registerChatSurface() { await initialization; }

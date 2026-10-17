@@ -1,3 +1,6 @@
+import { locateBoundedMessage } from './host-compat.mjs';
+import { getAnnotation } from './annotations.mjs';
+import { installTheme } from './settings.mjs';
 // Current-chat-only, read-only timeline. Native IDs stay zero based.
 import { edgePath, edgePresentation, branchText, snippet, PATH_LABEL, CANDIDATE_LABEL,
     timelineSummaryEntries } from './timeline-graph.mjs';
@@ -132,14 +135,22 @@ export function showBranchTree({ onPreview, onClose, focusMesId, focusSwipeIdx }
     searchToggle.setAttribute('aria-expanded', 'false');
     const search = element('input', 'text_pole st-swipe-tree-search st-swipe-timeline-search');
     search.type = 'search';
-    search.placeholder = '搜索楼层、角色或正文（高亮，不删路径）';
+    search.placeholder = '搜索名称、备注、楼层或正文（高亮，不删路径）';
     search.setAttribute('aria-label', search.placeholder);
     search.autocomplete = 'off';
     const previousMatch = button('st-swipe-timeline-match-prev', '上一匹配');
     const nextMatch = button('st-swipe-timeline-match-next', '下一匹配');
     const matchCount = element('span', 'st-swipe-timeline-match-count', '0 / 0');
     matchCount.setAttribute('aria-live', 'polite');
-    toolbar.append(search, previousMatch, nextMatch, matchCount);
+    const favoritesButton = button('st-swipe-timeline-favorites', '★ 收藏', '仅在收藏分支中查找，保留完整路径');
+    let favoritesOnly = false;
+    favoritesButton.setAttribute('aria-pressed', 'false');
+    favoritesButton.addEventListener('click', () => {
+        favoritesOnly = !favoritesOnly;
+        favoritesButton.setAttribute('aria-pressed', String(favoritesOnly));
+        void applySearch();
+    });
+    toolbar.append(search, favoritesButton, previousMatch, nextMatch, matchCount);
     const controls = element('div', 'st-swipe-timeline-controls');
     controls.id = `${MODAL_ID}-controls`;
     controls.hidden = !preferences.toolsExpanded;
@@ -215,6 +226,7 @@ export function showBranchTree({ onPreview, onClose, focusMesId, focusSwipeIdx }
     container.append(header, content);
     // The help floats outside the scroll-clipped header/container, but within the focus scope.
     overlay.append(container, helpPanel);
+    installTheme(overlay);
     prepareOverlayKeyboard(overlay);
     document.body.append(overlay);
 
@@ -377,7 +389,12 @@ export function showBranchTree({ onPreview, onClose, focusMesId, focusSwipeIdx }
             const selector = `#chat .mes[mesid="${row.id}"]`;
             let target = document.querySelector(selector);
             if (!target) {
-                const { showMoreMessages } = await import('/script.js');
+                const nativeApi = await import('/script.js');
+                const { showMoreMessages } = nativeApi;
+                const bounded = await locateBoundedMessage(nativeApi, row.id);
+                if (!rowIsCurrent(row, token)) return;
+                target = document.querySelector(selector);
+                if (bounded && !target) throw new Error('TT target message was not mounted');
                 if (!rowIsCurrent(row, token)) return;
                 while (!target) {
                     const first = document.querySelector('#chat .mes[mesid]');
@@ -420,7 +437,11 @@ export function showBranchTree({ onPreview, onClose, focusMesId, focusSwipeIdx }
         nodeElements.get(data.id)?.classList.add('st-swipe-timeline-node-selected');
         const heading = element('div', 'st-swipe-timeline-detail-heading');
         heading.append(element('strong', '', `${data.label} · ${data.isCurrent ? '当前选择' : '同层候选'}`));
-        const body = element('p', 'st-swipe-timeline-detail-text', snippet(branchText(row.message, data.swipeIdx), 1400));
+        const annotation = getAnnotation(row.message, data.swipeIdx);
+        const annotationSummary = element('div', 'st-swipe-annotation-summary');
+        annotationSummary.append(element('strong', 'st-swipe-annotation-name', `${annotation.favorite ? '★ ' : ''}${annotation.name}`));
+        if (annotation.note) annotationSummary.append(element('span', 'st-swipe-annotation-note', annotation.note));
+        const body = element('p', 'st-swipe-timeline-detail-text', branchText(row.message, data.swipeIdx).replace(/\r\n?/g, '\n'));
         const metadata = element('p', 'st-swipe-timeline-detail-meta', `${data.name} · ${data.count} 个候选`);
         const actions = element('div', 'st-swipe-timeline-detail-actions');
         const previewButton = button('st-swipe-tree-preview st-swipe-timeline-preview', '预览', '只预览，不更改聊天或 swipe');
@@ -439,7 +460,7 @@ export function showBranchTree({ onPreview, onClose, focusMesId, focusSwipeIdx }
             for (const name of refs) list.append(element('li', 'st-swipe-timeline-reference', name));
             references.append(list);
         }
-        detailPane.replaceChildren(heading, metadata, body, references);
+        detailPane.replaceChildren(heading, annotationSummary, metadata, body, references);
         detail.hidden = false;
         detailPane.scrollTop = 0;
     }
@@ -711,7 +732,7 @@ export function showBranchTree({ onPreview, onClose, focusMesId, focusSwipeIdx }
         const run = ++searchRevision, query = search.value.trim();
         const incremental = changedFloors && !searchPending && completedQuery === query;
         searchPending = true;
-        const result = await searchIndex.search(query, { current: () => run === searchRevision && valid(token),
+        const result = await searchIndex.search(query, { favoritesOnly, current: () => run === searchRevision && valid(token),
             visible: id => layout.positions.has(id),
             floors: incremental ? changedFloors.map(id => graph.byId.get(id)).filter(Boolean) : graph.floors });
         if (!result || run !== searchRevision || !valid(token)) return;

@@ -1,5 +1,47 @@
 @import url('./timeline.css');
 
+/* Original host-linked palette remains the default night mode. */
+.st-swipe-modal-overlay[data-swipe-theme="light"] {
+  color-scheme: light;
+  --st-swipe-surface: #f8fafc;
+  --st-swipe-text: #243247;
+  --st-swipe-muted: #59687c;
+  --st-swipe-border: #c6d1df;
+  --st-swipe-accent: #325ead;
+  --st-swipe-focus: #2356aa;
+  --st-swipe-shadow: rgb(25 45 75 / 18%);
+  --st-swipe-soft: #edf2f8;
+  --st-swipe-hover: #e0e9f5;
+  --st-swipe-selected: #e0eafa;
+  --st-swipe-previewer-md-em-color: #687185;
+  --st-swipe-previewer-md-strong-color: #243247;
+  --st-swipe-previewer-md-quote-color: #325ead;
+  --st-swipe-previewer-md-quote-bg: #e5edfa;
+  background: rgb(36 50 71 / 25%);
+  text-shadow: none;
+}
+.st-swipe-modal-overlay[data-swipe-theme="light"] :is(.text_pole, input, textarea, select) {
+  color: var(--st-swipe-text);
+  background: #fff;
+  border-color: var(--st-swipe-border);
+  text-shadow: none;
+  accent-color: var(--st-swipe-accent);
+}
+.st-swipe-modal-overlay[data-swipe-theme="light"] :is(button, .menu_button) { text-shadow: none; }
+.st-swipe-modal-overlay .st-swipe-theme-toggle { min-width: 32px; font: inherit; font-size: 1.2em; }
+.st-swipe-annotation-summary { display: flex; flex-wrap: wrap; gap: 4px 8px; min-width: 0; }
+.st-swipe-annotation-name { font-weight: 600; overflow-wrap: anywhere; }
+.st-swipe-favorite-indicator { color: var(--st-swipe-accent); }
+.st-swipe-annotation-note { flex-basis: 100%; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--st-swipe-muted); font-weight: normal; }
+.st-swipe-card .st-swipe-annotation-note { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.st-swipe-annotation-editor { width: min(94vw, 640px); height: auto; max-height: 90dvh; }
+.st-swipe-annotation-fields label { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.st-swipe-annotation-fields :is(input:not([type="checkbox"]), textarea) { width: 100%; margin: 0; }
+.st-swipe-annotation-fields textarea { resize: vertical; min-height: 100px; }
+.st-swipe-card-badge { min-width: 0; flex-wrap: wrap; }
+.st-swipe-card-badge .st-swipe-annotation-summary { flex-basis: 100%; }
+
+
 /* SillyTavern 主题桥接：无宿主变量时使用系统颜色，不强制深色。 */
 :root {
   --st-swipe-surface: var(--SmartThemeBlurTintColor, Canvas);

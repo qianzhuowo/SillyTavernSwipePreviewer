@@ -1,4 +1,5 @@
-// Browser-local display preferences only; never stored in chat or sent to the host.
+// Host-user display preferences; never stored in chat.
+import { getSettingsRecord, saveSettingsPatch } from './settings.mjs';
 export const TIMELINE_PREFERENCES_KEY = 'st-swipe-previewer-tree-preferences';
 export const DEFAULT_TIMELINE_PREFERENCES = Object.freeze({
     scale: 1,
@@ -21,6 +22,7 @@ export function normalizeTimelinePreferences(value) {
 }
 
 export function loadTimelinePreferences(storage) {
+    if (!storage) return normalizeTimelinePreferences(getSettingsRecord()?.timeline);
     try {
         // Access the browser storage getter inside try: some privacy modes reject it.
         const raw = (storage ?? globalThis.localStorage)?.getItem(TIMELINE_PREFERENCES_KEY);
@@ -29,6 +31,10 @@ export function loadTimelinePreferences(storage) {
 }
 
 export function saveTimelinePreferences(value, storage) {
+    if (!storage) {
+        try { saveSettingsPatch({ timeline: normalizeTimelinePreferences(value) }); return true; }
+        catch (error) { globalThis.toastr?.error?.(error.message); return false; }
+    }
     try {
         const target = storage ?? globalThis.localStorage;
         if (!target) return false;
