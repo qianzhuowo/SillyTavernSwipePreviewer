@@ -42,8 +42,10 @@ export function saveSettingsPatch(patch, context = globalThis.SillyTavern?.getCo
     return normalizeSettings(next);
 }
 export function installTheme(overlay) {
-    const ops = overlay.querySelector('.st-swipe-header-ops');
-    if (ops && !ops.querySelector('.st-swipe-theme-toggle')) {
+    // The preview keeps theme/settings next to its title; other overlays retain their toolbar.
+    const titleControls = overlay.querySelector('.st-swipe-title-controls');
+    const controls = titleControls ?? overlay.querySelector('.st-swipe-header-ops');
+    if (controls && !overlay.querySelector('.st-swipe-theme-toggle')) {
         const button = document.createElement('button');
         button.type = 'button';
         button.className = 'menu_button st-swipe-theme-toggle';
@@ -53,7 +55,8 @@ export function installTheme(overlay) {
                 document.querySelectorAll('.st-swipe-modal-overlay').forEach(applyTheme);
             } catch (error) { globalThis.toastr?.error?.(error.message); }
         });
-        ops.prepend(button);
+        if (titleControls) controls.append(button);
+        else controls.prepend(button);
     }
     applyTheme(overlay);
 }

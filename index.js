@@ -341,17 +341,17 @@ const initialization = (async function () {
       <div class="st-swipe-modal-container">
         <div class="st-swipe-modal-header">
           <div class="st-swipe-modal-header-top">
-            <span class="st-swipe-title">消息 #${mesId} (${swipes.length} 分支)</span>
-            <div class="st-swipe-header-ops">
-              <button type="button" id="${modalId}-delete-mode" class="menu_button fa-solid fa-trash-can" title="进入删除选择模式" aria-label="进入删除选择模式" aria-pressed="false" aria-controls="${modalId}-selection-toolbar ${modalId}-jump-list"></button>
-              <button id="${modalId}-tree" class="menu_button fa-solid fa-code-branch" title="当前聊天分支树" aria-label="当前聊天分支树"></button>
-              <div id="${modalId}-prev" class="menu_button fa-solid fa-chevron-left" title="上一个"></div>
-              <div id="${modalId}-next" class="menu_button fa-solid fa-chevron-right" title="下一个"></div>
-              <div id="${modalId}-toggle" class="menu_button fa-solid fa-list-ol" title="展开/收起列表"></div>
-              <div id="${modalId}-render" class="menu_button fa-solid fa-code" title="渲染预览 (iframe)"></div>
-              <div id="${modalId}-settings" class="menu_button fa-solid fa-gear" title="设置"></div>
-              <div id="${modalId}-close" class="menu_button fa-solid fa-xmark" title="关闭"></div>
+            <div class="st-swipe-title-controls">
+              <span class="st-swipe-title">消息 #${mesId} (${swipes.length} 分支)</span>
+              <button type="button" id="${modalId}-settings" class="menu_button fa-solid fa-gear" title="设置" aria-label="设置"></button>
             </div>
+            <div class="st-swipe-header-ops">
+              <button type="button" id="${modalId}-delete-mode" class="menu_button" title="进入删除选择模式" aria-label="进入删除选择模式" aria-pressed="false" aria-controls="${modalId}-selection-toolbar ${modalId}-jump-list"><i class="fa-solid fa-trash-can" aria-hidden="true"></i><span class="st-swipe-op-label">删除</span></button>
+              <button type="button" id="${modalId}-tree" class="menu_button" title="当前聊天分支树" aria-label="当前聊天分支树"><i class="fa-solid fa-code-branch" aria-hidden="true"></i><span class="st-swipe-op-label">树状图</span></button>
+              <button type="button" id="${modalId}-render" class="menu_button" title="渲染预览 (iframe)" aria-label="渲染预览 (iframe)"><i class="fa-solid fa-code" aria-hidden="true"></i><span class="st-swipe-op-label">渲染预览</span></button>
+              <button type="button" id="${modalId}-toggle" class="menu_button active" title="收起列表" aria-label="收起列表" aria-expanded="true" aria-controls="${modalId}-jump-list"><i class="fa-solid fa-list-ol" aria-hidden="true"></i><span class="st-swipe-op-label">收起</span></button>
+            </div>
+            <button type="button" id="${modalId}-close" class="menu_button fa-solid fa-xmark" title="关闭" aria-label="关闭"></button>
           </div>
           <div id="${modalId}-selection-toolbar" class="st-swipe-selection-toolbar" hidden>
             <span class="st-swipe-selection-hint">点击下方编号选择待删分支</span>
@@ -367,8 +367,14 @@ const initialization = (async function () {
           <div id="${modalId}-jump-list" class="st-swipe-jump-list" aria-label="分支导航"></div>
         </div>
 
-        <div class="st-swipe-modal-content" id="${modalId}-content">
-          <div class="st-swipe-loading">正在加载分支内容...</div>
+        <div class="st-swipe-preview-body">
+          <div class="st-swipe-preview-nav" role="group" aria-label="浏览相邻分支">
+            <button type="button" id="${modalId}-prev" class="menu_button fa-solid fa-chevron-up" title="上一个" aria-label="上一个" aria-controls="${modalId}-content"></button>
+            <button type="button" id="${modalId}-next" class="menu_button fa-solid fa-chevron-down" title="下一个" aria-label="下一个" aria-controls="${modalId}-content"></button>
+          </div>
+          <div class="st-swipe-modal-content" id="${modalId}-content">
+            <div class="st-swipe-loading">正在加载分支内容...</div>
+          </div>
         </div>
       </div>
     `;
@@ -449,6 +455,22 @@ const initialization = (async function () {
     };
 
     const contentEl = modalOverlay.querySelector(`#${modalId}-content`);
+    const previewBody = modalOverlay.querySelector('.st-swipe-preview-body');
+    const previewNav = modalOverlay.querySelector('.st-swipe-preview-nav');
+    let navIdleTimer = null;
+    const fadeNavigation = () => {
+      if (closed) return;
+      previewNav.classList.add('is-scrolling');
+      clearTimeout(navIdleTimer);
+      navIdleTimer = setTimeout(() => {
+        navIdleTimer = null;
+        previewNav.classList.remove('is-scrolling');
+      }, 650);
+    };
+    // Passive listeners preserve native wheel/touch scrolling, including inertial scrolls.
+    contentEl.addEventListener('scroll', fadeNavigation, { passive: true });
+    previewBody.addEventListener('wheel', fadeNavigation, { passive: true });
+    previewBody.addEventListener('touchmove', fadeNavigation, { passive: true });
     const jumpListEl = modalOverlay.querySelector(`#${modalId}-jump-list`);
     const titleEl = modalOverlay.querySelector('.st-swipe-title');
     const annotationTooltip = installAnnotationTooltip({
@@ -553,9 +575,9 @@ const initialization = (async function () {
                 <button class="menu_button st-swipe-action-branch" data-idx="${idx}">创建新存档</button>
                 <button class="menu_button st-swipe-action-annotate" data-idx="${idx}">命名/备注</button>
                 <button type="button" class="menu_button st-swipe-action-favorite ${a.favorite ? 'active' : ''}" data-idx="${idx}" aria-pressed="${a.favorite}" aria-label="${a.favorite ? '取消收藏' : '收藏此分支'}" title="${a.favorite ? '取消收藏' : '收藏此分支'}"><span class="st-swipe-star" aria-hidden="true">${a.favorite ? '★' : '☆'}</span></button>
-                <button class="menu_button st-swipe-action-edit" data-idx="${idx}">编辑分支</button>
-                <button class="menu_button st-swipe-action-move-up" data-idx="${idx}" ${idx === 0 ? 'disabled' : ''}>上移</button>
-                <button class="menu_button st-swipe-action-move-down" data-idx="${idx}" ${idx === swipes.length - 1 ? 'disabled' : ''}>下移</button>
+                <button type="button" class="menu_button st-swipe-action-edit st-swipe-icon-action" data-idx="${idx}" title="编辑分支" aria-label="编辑分支"><i class="fa-solid fa-pencil" aria-hidden="true"></i></button>
+                <button type="button" class="menu_button st-swipe-action-move-up st-swipe-icon-action" data-idx="${idx}" title="上移" aria-label="上移" ${idx === 0 ? 'disabled' : ''}><i class="fa-solid fa-arrow-up" aria-hidden="true"></i></button>
+                <button type="button" class="menu_button st-swipe-action-move-down st-swipe-icon-action" data-idx="${idx}" title="下移" aria-label="下移" ${idx === swipes.length - 1 ? 'disabled' : ''}><i class="fa-solid fa-arrow-down" aria-hidden="true"></i></button>
               </div>
             </div>
 
@@ -1173,6 +1195,17 @@ const initialization = (async function () {
       for (const [idx, value] of next) renderPreviewByIdx.set(idx, value);
     };
 
+    function updateJumpListState() {
+      const expanded = !jumpListEl.classList.contains('hidden');
+      const button = modalOverlay.querySelector(`#${modalId}-toggle`);
+      button.classList.toggle('active', expanded);
+      button.setAttribute('aria-expanded', String(expanded));
+      button.setAttribute('aria-disabled', String(selectionMode));
+      button.title = expanded ? '收起列表' : '展开列表';
+      button.setAttribute('aria-label', button.title);
+      button.querySelector('.st-swipe-op-label').textContent = expanded ? '收起' : '展开';
+    }
+
     function updateSelection() {
       const deleteModeButton = modalOverlay.querySelector(`#${modalId}-delete-mode`);
       deleteModeButton.disabled = busy || !canDelete();
@@ -1185,7 +1218,7 @@ const initialization = (async function () {
       modalOverlay.querySelector('.st-swipe-selection-count').textContent = `已选 ${selected.size} / ${swipes.length} 项（至少保留 1 项）`;
       modalOverlay.querySelectorAll('[data-selection]').forEach(button => { button.disabled = busy; });
       modalOverlay.querySelector('[data-selection="delete"]').disabled = busy || !selectionMode || !selected.size || selected.size >= swipes.length;
-      modalOverlay.querySelector(`#${modalId}-toggle`).setAttribute('aria-disabled', String(selectionMode));
+      updateJumpListState();
       jumpListEl.setAttribute('aria-label', selectionMode ? '选择待删除的分支' : '分支导航');
       jumpListEl.querySelectorAll('.st-swipe-jump-item').forEach(button => {
         const idx = Number(button.dataset.idx);
@@ -1590,7 +1623,9 @@ const initialization = (async function () {
     modalOverlay.querySelector(`#${modalId}-prev`)?.addEventListener('click', () => scrollToIdx(Math.max(0, currentViewIdx - 1)));
     modalOverlay.querySelector(`#${modalId}-next`)?.addEventListener('click', () => scrollToIdx(Math.min(Math.max(swipes.length - 1, 0), currentViewIdx + 1)));
     modalOverlay.querySelector(`#${modalId}-toggle`)?.addEventListener('click', () => {
-      if (!selectionMode) jumpListEl.classList.toggle('hidden');
+      if (selectionMode) return;
+      jumpListEl.classList.toggle('hidden');
+      updateJumpListState();
     });
 
     // 右上角：渲染预览（全局开关）
@@ -1621,6 +1656,11 @@ const initialization = (async function () {
     function closeModal() {
       if (closed) return;
       closed = true;
+      clearTimeout(navIdleTimer);
+      contentEl.removeEventListener('scroll', fadeNavigation);
+      previewBody.removeEventListener('wheel', fadeNavigation);
+      previewBody.removeEventListener('touchmove', fadeNavigation);
+      previewNav.classList.remove('is-scrolling');
       annotationTooltip.dispose();
       cancelEdit?.();
       releaseFocus();

@@ -17,6 +17,7 @@
   --st-swipe-gold: #efb55d;
   --st-swipe-gold-edge: #a56f25;
   --st-swipe-bookmark: #90c8ce;
+  --st-swipe-tree-edge: #90cfa3;
   --st-swipe-tooltip-surface: #252c36;
   --st-swipe-tooltip-text: #f1f4f8;
   --st-swipe-tooltip-muted: #d1d9e4;
@@ -39,6 +40,7 @@
   --st-swipe-gold: #f5b333;
   --st-swipe-gold-edge: #a16008;
   --st-swipe-bookmark: #22676a;
+  --st-swipe-tree-edge: #286943;
   --st-swipe-tooltip-surface: #fffefa;
   --st-swipe-tooltip-text: #202b39;
   --st-swipe-tooltip-muted: #505d6d;
@@ -161,6 +163,90 @@
   flex-shrink: 1;
   flex-wrap: wrap;
   min-width: 0;
+}
+
+/* 预览主弹窗独立布局，避免改变设置/编辑/树状图等共用头部。 */
+#st-swipe-preview-modal .st-swipe-modal-header-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 8px;
+}
+
+#st-swipe-preview-modal .st-swipe-title-controls {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 6px;
+}
+
+#st-swipe-preview-modal .st-swipe-title {
+  flex: 0 1 auto;
+}
+
+#st-swipe-preview-modal .st-swipe-header-ops {
+  flex-wrap: nowrap;
+  gap: 6px;
+}
+
+#st-swipe-preview-modal .st-swipe-modal-header-top .menu_button {
+  flex: 0 0 auto;
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+  padding: 0;
+}
+
+#st-swipe-preview-modal .st-swipe-header-ops .menu_button {
+  font-family: inherit;
+}
+
+#st-swipe-preview-modal .st-swipe-op-label { display: none; }
+
+/* 导航覆盖在卡片上层，不占用正文宽度；滚动时淡出，停止后恢复。 */
+#st-swipe-preview-modal .st-swipe-preview-body {
+  --st-swipe-nav-size: 36px;
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+
+#st-swipe-preview-modal .st-swipe-preview-nav {
+  position: absolute;
+  z-index: 1;
+  inset-block-start: 20px;
+  inset-inline-end: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+
+#st-swipe-preview-modal .st-swipe-preview-nav .menu_button {
+  width: var(--st-swipe-nav-size);
+  min-width: var(--st-swipe-nav-size);
+  height: var(--st-swipe-nav-size);
+  padding: 0;
+  box-shadow: 0 2px 6px var(--st-swipe-shadow);
+  pointer-events: auto;
+  opacity: 1;
+  transition: opacity 140ms ease, background-color 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
+}
+
+#st-swipe-preview-modal .st-swipe-preview-nav.is-scrolling .menu_button {
+  opacity: 0.35;
+}
+
+#st-swipe-preview-modal .st-swipe-preview-nav.is-scrolling .menu_button:focus-visible {
+  opacity: 1;
+}
+
+/* 触摸设备不使用 hover，避免点按后悬停状态粘住而无法淡出。 */
+@media (hover: hover) and (pointer: fine) {
+  #st-swipe-preview-modal .st-swipe-preview-nav.is-scrolling:hover .menu_button {
+    opacity: 1;
+  }
 }
 
 /* 跳转列表 */
@@ -818,6 +904,25 @@
   border-color: var(--st-swipe-button-hover-border, var(--st-swipe-accent));
 }
 
+#st-swipe-preview-modal-tree {
+  --st-swipe-button-border: var(--st-swipe-tree-edge);
+  --st-swipe-button-hover-border: var(--st-swipe-tree-edge);
+}
+
+#st-swipe-preview-modal-toggle.active {
+  --st-swipe-button-active-border: var(--st-swipe-focus);
+  --st-swipe-button-hover-border: var(--st-swipe-focus);
+  box-shadow: inset 0 0 0 1px var(--st-swipe-focus), 0 0 6px color-mix(in srgb, var(--st-swipe-focus) 24%, transparent);
+}
+
+#st-swipe-preview-modal .st-swipe-card-actions .st-swipe-icon-action {
+  flex: 0 0 36px;
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+  padding: 0;
+}
+
 .st-swipe-modal-overlay .st-swipe-action-delete {
   --st-swipe-button-border: var(--st-swipe-accent);
   --st-swipe-button-hover: var(--st-swipe-selected);
@@ -1301,6 +1406,13 @@ body.no-blur .st-swipe-modal-overlay {
     padding: 6px;
   }
 
+  #st-swipe-preview-modal .st-swipe-card-actions .st-swipe-icon-action {
+    flex-basis: 44px;
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+  }
+
   .st-swipe-card-badge .st-swipe-action-render-one { width: 44px; height: 44px; }
 
   .st-swipe-header-ops .menu_button {
@@ -1310,6 +1422,64 @@ body.no-blur .st-swipe-modal-overlay {
     font-size: 0.9em;
     padding: 6px;
   }
+
+  #st-swipe-preview-modal .st-swipe-modal-header-top {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    padding: 10px;
+    gap: 10px 6px;
+  }
+
+  #st-swipe-preview-modal .st-swipe-title-controls {
+    grid-column: 1;
+    grid-row: 1;
+    gap: 4px;
+  }
+
+  #st-swipe-preview-modal .st-swipe-title { font-size: 0.9em; }
+
+  #st-swipe-preview-modal .st-swipe-title-controls .menu_button,
+  #st-swipe-preview-modal #st-swipe-preview-modal-close {
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
+    min-height: 32px;
+    border-radius: 50%;
+    font-size: 0.85em;
+  }
+
+  #st-swipe-preview-modal .st-swipe-title-controls .st-swipe-theme-toggle { font-size: 1.1em; }
+
+  #st-swipe-preview-modal-close {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+  }
+
+  #st-swipe-preview-modal .st-swipe-header-ops {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-column: 1 / -1;
+    grid-row: 2;
+    width: 100%;
+    gap: 4px;
+  }
+
+  #st-swipe-preview-modal .st-swipe-header-ops .menu_button {
+    width: 100%;
+    min-width: 0;
+    height: auto;
+    min-height: 44px;
+    padding: 6px 2px;
+    gap: 4px;
+    font-size: clamp(10px, 2.8vw, 14px);
+    white-space: nowrap;
+  }
+
+  #st-swipe-preview-modal .st-swipe-op-label { display: inline; }
+
+  #st-swipe-preview-modal .st-swipe-preview-body { --st-swipe-nav-size: 44px; }
+  #st-swipe-preview-modal .st-swipe-preview-nav { inset-block-start: 10px; }
 
   .st-swipe-jump-list {
     padding: 0 12px 10px 12px;
@@ -1385,10 +1555,12 @@ body.no-blur .st-swipe-modal-overlay {
   .st-swipe-modal-overlay .st-swipe-selection-toolbar button { min-height: 44px; }
   .st-swipe-modal-overlay .st-swipe-header-ops .menu_button { min-width: 44px; }
   .st-swipe-jump-item { min-width: 44px; height: 44px; }
+  #st-swipe-preview-modal .st-swipe-preview-body { --st-swipe-nav-size: 44px; }
 }
 
 /* 系统减少动态效果首选项也适用于跳转和控件。 */
 @media (prefers-reduced-motion: reduce) {
+  #st-swipe-preview-modal .st-swipe-preview-nav .menu_button { transition: none; }
   .st-swipe-modal-overlay *,
   .st-swipe-modal-overlay *::before,
   .st-swipe-modal-overlay *::after {
