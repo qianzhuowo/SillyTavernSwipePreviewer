@@ -1,5 +1,6 @@
 import { locateBoundedMessage } from './host-compat.mjs';
 import { getAnnotation } from './annotations.mjs';
+import { editAnnotation } from './annotation-editor.mjs';
 import { installTheme } from './settings.mjs';
 // Current-chat-only, read-only timeline. Native IDs stay zero based.
 import { edgePath, edgePresentation, branchText, snippet, PATH_LABEL, CANDIDATE_LABEL,
@@ -58,14 +59,15 @@ function archiveReferences(message) {
     return [...refs];
 }
 
-/** @param {{onPreview: Function, onClose?: Function, focusMesId?: number, focusSwipeIdx?: number}} options
- *  @returns {{close: () => void}} Preview callback also owns its async identity guards. */
-export function showBranchTree({ onPreview, onClose, focusMesId, focusSwipeIdx } = {}) {
+/** @param {{onPreview: Function, onClose?: Function, onAnnotationChange?: Function, focusMesId?: number, focusSwipeIdx?: number}} options
+ *  @returns {{close: () => void}} Preview and annotation callbacks own native persistence guards. */
+export function showBranchTree({ onPreview, onClose, onAnnotationChange, focusMesId, focusSwipeIdx } = {}) {
     activeTree?.close('replace');
     if (typeof onPreview !== 'function') throw new TypeError('showBranchTree 需要 onPreview 回调');
+    let cancelAnnotationEdit = null, annotationBusy = false;
     const initialContext = getContext();
     const preferences = loadTimelinePreferences();
-    let { scale, includeCandidates, onlyChar, onlyBranches } = preferences;
+    let { scale, includeCandidates, onlyChar, onlyBranches, favoritesOnly, annotatedOnly } = preferences;
     document.getElementById(MODAL_ID)?.remove();
     const previousFocus = document.activeElement;
     const originChat = initialContext.chat, originKey = identity(initialContext);
@@ -99,7 +101,7 @@ export function showBranchTree({ onPreview, onClose, focusMesId, focusSwipeIdx }
     const roleLegend = element('div', 'st-swipe-timeline-role-legend');
     roleLegend.append(element('span', 'st-swipe-timeline-legend-char', '● char 楼层'),
         element('span', 'st-swipe-timeline-legend-user', '● user 楼层'),
-        element('span', '', '● 系统楼层'));
+        element('span', 'st-swipe-timeline-legend-system', '● 系统楼层'));
     headerTop.append(titleGroup, roleLegend, operations);
     const stats = element('div', 'st-swipe-tree-stats st-swipe-timeline-stats');
     const legend = element('div', 'st-swipe-timeline-legend');
@@ -142,15 +144,11 @@ export function showBranchTree({ onPreview, onClose, focusMesId, focusSwipeIdx }
     const nextMatch = button('st-swipe-timeline-match-next', '下一匹配');
     const matchCount = element('span', 'st-swipe-timeline-match-count', '0 / 0');
     matchCount.setAttribute('aria-live', 'polite');
-    const favoritesButton = button('st-swipe-timeline-favorites', '★ 收藏', '仅在收藏分支中查找，保留完整路径');
-    let favoritesOnly = false;
-    favoritesButton.setAttribute('aria-pressed', 'false');
-    favoritesButton.addEventListener('click', () => {
-        favoritesOnly = !favoritesOnly;
-        favoritesButton.setAttribute('aria-pressed', String(favoritesOnly));
-        void applySearch();
-    });
-    toolbar.append(search, favoritesButton, previousMatch, nextMatch, matchCount);
+    const favoritesButton = button('st-swipe-timeline-favorites', '★ 收藏', '画布仅显示收藏分支');
+    const annotatedButton = button('st-swipe-timeline-annotated', '有命名/备注', '画布仅显示有命名或备注的分支');
+    favoritesButton.setAttribute('aria-pressed', String(favoritesOnly));
+    annotatedButton.setAttribute('aria-pressed', String(annotatedOnly));
+    toolbar.append(search, previousMatch, nextMatch, matchCount);
     const controls = element('div', 'st-swipe-timeline-controls');
     controls.id = `${MODAL_ID}-controls`;
     controls.hidden = !preferences.toolsExpanded;
@@ -176,7 +174,7 @@ export function showBranchTree({ onPreview, onClose, focusMesId, focusSwipeIdx }
     const filterGroup = element('div', 'st-swipe-timeline-control-row');
     zoomGroup.append(zoomIn, zoomOut, zoomReset);
     navigationGroup.append(goHead, goTail, goSource);
-    filterGroup.append(toggleCandidates, onlyCharButton, onlyBranchesButton);
+    filterGroup.append(toggleCandidates, onlyCharButton, onlyBranchesButton, favoritesButton, annotatedButton);
     controls.append(zoomGroup, navigationGroup, filterGroup);
     controls.setAttribute('role', 'group');
     controls.setAttribute('aria-label', '画布工具栏');
@@ -339,6 +337,7 @@ export function showBranchTree({ onPreview, onClose, focusMesId, focusSwipeIdx }
     function close(reason = 'dismiss') {
         if (closed) return;
         closed = true;
+        cancelAnnotationEdit?.();
         hideHelp();
         revision++;
         searchRevision++;
@@ -436,13 +435,94 @@ export function showBranchTree({ onPreview, onClose, focusMesId, focusSwipeIdx }
         anchorSwipeIdx = data.swipeIdx;
         nodeElements.get(data.id)?.classList.add('st-swipe-timeline-node-selected');
         const heading = element('div', 'st-swipe-timeline-detail-heading');
-        heading.append(element('strong', '', `${data.label} · ${data.isCurrent ? '当前选择' : '同层候选'}`));
+        heading.append(element('strong', '', `#${data.mesId} 分支${data.swipeIdx + 1} · ${data.isCurrent ? '当前选择' : '同层候选'}`));
         const annotation = getAnnotation(row.message, data.swipeIdx);
-        const annotationSummary = element('div', 'st-swipe-annotation-summary');
-        annotationSummary.append(element('strong', 'st-swipe-annotation-name', `${annotation.favorite ? '★ ' : ''}${annotation.name}`));
-        if (annotation.note) annotationSummary.append(element('span', 'st-swipe-annotation-note', annotation.note));
+        const annotationSummary = annotation.name || annotation.note.trim()
+            ? element('div', 'st-swipe-annotation-summary st-swipe-timeline-annotation') : null;
+        if (annotation.name) annotationSummary.append(element('strong', 'st-swipe-annotation-name', annotation.name));
+        if (annotation.note.trim()) annotationSummary.append(element('div', 'st-swipe-annotation-note', annotation.note));
         const body = element('p', 'st-swipe-timeline-detail-text', branchText(row.message, data.swipeIdx).replace(/\r\n?/g, '\n'));
-        const metadata = element('p', 'st-swipe-timeline-detail-meta', `${data.name} · ${data.count} 个候选`);
+        const annotationActions = element('div', 'st-swipe-timeline-detail-annotation-actions');
+        const favoriteButton = button('st-swipe-timeline-detail-favorite', '', annotation.favorite ? '取消收藏' : '收藏此分支');
+        const favoriteStar = element('span', 'st-swipe-star', annotation.favorite ? '★' : '☆');
+        favoriteStar.setAttribute('aria-hidden', 'true');
+        favoriteButton.append(favoriteStar, element('span', '', annotation.favorite ? '已收藏' : '收藏'));
+        favoriteButton.setAttribute('aria-pressed', String(annotation.favorite));
+        const annotateButton = button('st-swipe-timeline-detail-annotate', '命名 / 备注');
+        const readOnly = !onAnnotationChange || row.message.tt_swipe_cold || row.message.is_user || row.message.is_system
+            || row.message.extra?.isSmallSys || !Array.isArray(row.message.swipes) || !row.message.swipes.length;
+        favoriteButton.disabled = annotateButton.disabled = Boolean(readOnly || annotationBusy);
+        const mutateAnnotation = async edit => {
+            if (annotationBusy || readOnly || !rowIsCurrent(row, token)) return;
+            annotationBusy = true;
+            favoriteButton.disabled = annotateButton.disabled = true;
+            const signature = JSON.stringify(row.message);
+            const isValid = () => rowIsCurrent(row, token) && JSON.stringify(row.message) === signature;
+            let failure = null;
+            try {
+                let value = { ...annotation, favorite: !annotation.favorite };
+                if (edit) {
+                    const editor = editAnnotation(annotation, { index: data.swipeIdx,
+                        // Detail actions stay disabled until the transaction settles. Avoid restoring
+                        // focus to an old/disabled action; finally restores the freshly rendered one.
+                        returnFocus: () => viewport });
+                    cancelAnnotationEdit = editor.cancel;
+                    value = await editor.promise;
+                    cancelAnnotationEdit = null;
+                }
+                if (!value || !isValid()) return;
+                await onAnnotationChange({ mesId: row.id, swipeIdx: data.swipeIdx, message: row.message, value,
+                    isValid, isActive: () => sameChat() });
+            } catch (error) { failure = error; }
+            finally {
+                cancelAnnotationEdit = null;
+                annotationBusy = false;
+                const settledFocus = document.activeElement;
+                const restoreFocus = selectedId === data.id && (settledFocus === favoriteButton
+                    || settledFocus === annotateButton || settledFocus === viewport || settledFocus === document.body);
+                // Native update/rollback events can invalidate the captured row and detach its
+                // buttons while saving. Settle every outcome (including cancel/failure) against
+                // the latest message, rather than enabling stale button references.
+                if (sameChat() && graph && valid(graphToken)) {
+                    try {
+                        const settlementToken = graphToken;
+                        let structural = false;
+                        if (chatArray[row.id] === row.message) {
+                            dirtyFloors.delete(row.id);
+                            const result = graph.update(row.id);
+                            structural = result.structural;
+                            if (!structural) {
+                                displayCache.invalidate(row.id); searchIndex.invalidate(row.id);
+                                rows.set(row.id, { id: row.id, message: row.message, version: result.floor.version });
+                            }
+                        }
+                        if (!structural) {
+                            await renderGraph(settlementToken, false);
+                            if (valid(settlementToken)) {
+                                renderWindow();
+                                // The user can inspect another node during a slow save. Refresh
+                                // that current selection without stealing it back to the edited one.
+                                const next = selectedId ? displayCache.get(selectedId) : null;
+                                if (next && layout.positions.has(next.id)) showDetail(next, graphToken);
+                                else detail.hidden = true;
+                            }
+                        }
+                    } catch (error) { failure ??= error; }
+                }
+                const focusUnchanged = document.activeElement === settledFocus
+                    || (!settledFocus?.isConnected && document.activeElement === document.body);
+                if (restoreFocus && focusUnchanged && sameChat() && isTopSwipeOverlay(overlay)) {
+                    const actionClass = edit ? '.st-swipe-timeline-detail-annotate' : '.st-swipe-timeline-detail-favorite';
+                    const action = !detail.hidden && selectedId === data.id ? detailPane.querySelector(actionClass) : null;
+                    const fallback = !controls.hidden ? (favoritesOnly ? favoritesButton : annotatedOnly ? annotatedButton : viewport) : viewport;
+                    (action?.isConnected && !action.disabled ? action : fallback).focus({ preventScroll: true });
+                }
+                if (failure) report(failure, '保存分支标记失败');
+            }
+        };
+        favoriteButton.addEventListener('click', () => void mutateAnnotation(false));
+        annotateButton.addEventListener('click', () => void mutateAnnotation(true));
+        annotationActions.append(favoriteButton, annotateButton);
         const actions = element('div', 'st-swipe-timeline-detail-actions');
         const previewButton = button('st-swipe-tree-preview st-swipe-timeline-preview', '预览', '只预览，不更改聊天或 swipe');
         previewButton.dataset.mesId = String(data.mesId);
@@ -460,7 +540,7 @@ export function showBranchTree({ onPreview, onClose, focusMesId, focusSwipeIdx }
             for (const name of refs) list.append(element('li', 'st-swipe-timeline-reference', name));
             references.append(list);
         }
-        detailPane.replaceChildren(heading, annotationSummary, metadata, body, references);
+        detailPane.replaceChildren(heading, annotationActions, ...(annotationSummary ? [annotationSummary] : []), body, references);
         detail.hidden = false;
         detailPane.scrollTop = 0;
     }
@@ -495,7 +575,7 @@ export function showBranchTree({ onPreview, onClose, focusMesId, focusSwipeIdx }
         if (preserveCenter) viewport.scrollLeft = Math.max(0, centerX * scale + stageOffsetX - lastViewportWidth / 2);
     }
     function persistPreferences() {
-        saveTimelinePreferences({ scale: pendingZoom ?? scale, includeCandidates, onlyChar, onlyBranches,
+        saveTimelinePreferences({ scale: pendingZoom ?? scale, includeCandidates, onlyChar, onlyBranches, favoritesOnly, annotatedOnly,
             toolsExpanded: !controls.hidden });
     }
     function setZoom(next) {
@@ -519,7 +599,7 @@ export function showBranchTree({ onPreview, onClose, focusMesId, focusSwipeIdx }
     function makeNode(data, token) {
         const node = button('st-swipe-timeline-node', '');
         node.append(element('strong', 'st-swipe-timeline-node-label'),
-            element('span', 'st-swipe-timeline-node-role'), element('span', 'st-swipe-timeline-node-snippet'));
+            element('span', 'st-swipe-timeline-node-name'), element('span', 'st-swipe-timeline-node-snippet'));
         // Detached nodes and changed floors must not dispatch stale actions. Unchanged cards keep their listeners.
         const current = () => nodeElements.get(data.id) === node && node.isConnected && valid(token)
             && node._data?.version === graph.byId.get(data.mesId)?.version && !dirtyFloors.has(data.mesId);
@@ -539,8 +619,9 @@ export function showBranchTree({ onPreview, onClose, focusMesId, focusSwipeIdx }
             node.classList.toggle('st-swipe-timeline-node-current', data.isCurrent);
             node.classList.toggle('st-swipe-timeline-node-candidate', !data.isCurrent);
             if (data.isCurrent) node.setAttribute('aria-current', 'true'); else node.removeAttribute('aria-current');
-            node.children[0].textContent = `${data.label} · ${data.isCurrent ? '当前' : '候选'}`;
-            node.children[1].textContent = `${data.name}（${data.role}） · ${data.count}选1`;
+            node.children[0].textContent = data.label;
+            node.children[1].textContent = data.annotationName;
+            node.children[1].hidden = !data.annotationName;
             node.children[2].textContent = data.summary;
         }
         const p = layout.positions.get(data.id);
@@ -626,7 +707,7 @@ export function showBranchTree({ onPreview, onClose, focusMesId, focusSwipeIdx }
     async function renderGraph(token, center = true, changedFloors = null) {
         if (!graph || !valid(token)) return;
         ++renderRevision;
-        visibleGraph = layout = createTimelineView(graph, { onlyChar, onlyBranches, includeCandidates });
+        visibleGraph = layout = createTimelineView(graph, { onlyChar, onlyBranches, includeCandidates, favoritesOnly, annotatedOnly });
         if (!edges.querySelector('defs')) {
             const defs = svgElement('defs');
             const marker = svgElement('marker', { id: 'st-swipe-timeline-arrow', viewBox: '0 0 10 10', refX: 9, refY: 5,
@@ -637,6 +718,7 @@ export function showBranchTree({ onPreview, onClose, focusMesId, focusSwipeIdx }
         resizeStage();
         const targetId = focusTimelineId(layout, anchorMesId, anchorSwipeIdx);
         locationStatus.textContent = !targetId && graph.floors.length ? '当前筛选下没有可见楼层，请调整展示选项。' : '';
+        if (selectedId && !layout.positions.has(selectedId)) { selectedId = null; detail.hidden = true; }
         if (center && targetId) {
             const requested = anchorMesId; selectedId = targetId; focusGraphNode(targetId);
             if (Number.isInteger(requested) && anchorMesId !== requested)
@@ -732,7 +814,7 @@ export function showBranchTree({ onPreview, onClose, focusMesId, focusSwipeIdx }
         const run = ++searchRevision, query = search.value.trim();
         const incremental = changedFloors && !searchPending && completedQuery === query;
         searchPending = true;
-        const result = await searchIndex.search(query, { favoritesOnly, current: () => run === searchRevision && valid(token),
+        const result = await searchIndex.search(query, { current: () => run === searchRevision && valid(token),
             visible: id => layout.positions.has(id),
             floors: incremental ? changedFloors.map(id => graph.byId.get(id)).filter(Boolean) : graph.floors });
         if (!result || run !== searchRevision || !valid(token)) return;
@@ -819,7 +901,7 @@ export function showBranchTree({ onPreview, onClose, focusMesId, focusSwipeIdx }
         messageTimer = setTimeout(() => {
             messageTimer = 0;
             if (!valid(graphToken)) return;
-            let reflow = false;
+            let reflow = favoritesOnly || annotatedOnly;
             for (const mesId of dirtyFloors) {
                 const result = graph.update(mesId);
                 if (result.structural) { scheduleRefresh(); return; }
@@ -898,6 +980,20 @@ export function showBranchTree({ onPreview, onClose, focusMesId, focusSwipeIdx }
         if (!valid(graphToken)) return;
         void renderGraph(graphToken).catch(error => report(error, '切换展示选项失败'));
     };
+    favoritesButton.addEventListener('click', () => {
+        if (!valid(graphToken)) return;
+        favoritesOnly = !favoritesOnly;
+        favoritesButton.setAttribute('aria-pressed', String(favoritesOnly));
+        persistPreferences();
+        changeFilter();
+    });
+    annotatedButton.addEventListener('click', () => {
+        if (!valid(graphToken)) return;
+        annotatedOnly = !annotatedOnly;
+        annotatedButton.setAttribute('aria-pressed', String(annotatedOnly));
+        persistPreferences();
+        changeFilter();
+    });
     onlyCharButton.addEventListener('click', () => {
         if (!valid(graphToken)) return;
         onlyChar = !onlyChar;
@@ -915,8 +1011,8 @@ export function showBranchTree({ onPreview, onClose, focusMesId, focusSwipeIdx }
     zoomIn.addEventListener('click', () => setZoom((pendingZoom ?? scale) + 0.15));
     zoomOut.addEventListener('click', () => setZoom((pendingZoom ?? scale) - 0.15));
     zoomReset.addEventListener('click', () => setZoom(1));
-    goHead.addEventListener('click', () => { if (visibleGraph?.floors.length) focusGraphNode(visibleGraph.floors[0].currentId, true); });
-    goTail.addEventListener('click', () => { if (visibleGraph?.floors.length) focusGraphNode(visibleGraph.floors.at(-1).currentId, true); });
+    goHead.addEventListener('click', () => { const id = focusTimelineId(visibleGraph, -1); if (id) focusGraphNode(id, true); });
+    goTail.addEventListener('click', () => { const id = focusTimelineId(visibleGraph, Number.MAX_SAFE_INTEGER); if (id) focusGraphNode(id, true); });
     goSource.disabled = !Number.isInteger(focusMesId) || focusMesId < 0;
     goSource.addEventListener('click', () => {
         if (!sourceAvailable || !valid(graphToken)) return;
@@ -952,7 +1048,8 @@ export function showBranchTree({ onPreview, onClose, focusMesId, focusSwipeIdx }
             source.on(types[name], handler);
             subscriptions.push([source, types[name], handler]);
         };
-        subscribe('CHAT_CHANGED', () => scheduleRefresh(true));
+        subscribe('CHAT_CHANGED', () => { cancelAnnotationEdit?.(); scheduleRefresh(true); });
+        subscribe('GENERATION_STARTED', () => { cancelAnnotationEdit?.(); });
         for (const name of ['MESSAGE_SWIPED', 'MESSAGE_UPDATED', 'MESSAGE_EDITED', 'MESSAGE_DELETED',
             'MESSAGE_RECEIVED', 'MESSAGE_SENT', 'MESSAGE_SWIPE_DELETED', 'GENERATION_ENDED',
             'GENERATION_STOPPED', 'CHARACTER_FIRST_MESSAGE_SELECTED']) subscribe(name, payload => scheduleMessage(name, payload));

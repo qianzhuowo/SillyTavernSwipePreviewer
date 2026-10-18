@@ -6,6 +6,8 @@ export const DEFAULT_TIMELINE_PREFERENCES = Object.freeze({
     includeCandidates: true,
     onlyChar: false,
     onlyBranches: false,
+    favoritesOnly: false,
+    annotatedOnly: false,
     toolsExpanded: false,
 });
 
@@ -15,7 +17,7 @@ export function normalizeTimelinePreferences(value) {
     if (typeof source.scale === 'number' && Number.isFinite(source.scale)) {
         result.scale = Math.round(Math.max(0.3, Math.min(2, source.scale)) * 100) / 100;
     }
-    for (const key of ['includeCandidates', 'onlyChar', 'onlyBranches', 'toolsExpanded']) {
+    for (const key of ['includeCandidates', 'onlyChar', 'onlyBranches', 'toolsExpanded', 'favoritesOnly', 'annotatedOnly']) {
         if (typeof source[key] === 'boolean') result[key] = source[key];
     }
     return result;

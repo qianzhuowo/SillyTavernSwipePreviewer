@@ -44,7 +44,8 @@ export class TimelineIndex {
         const isCurrent = swipeIdx === floor.currentSwipe;
         const annotation = getAnnotation(this.chat[mesId], swipeIdx);
         return { ...floor, id: `${mesId}:${swipeIdx}`, swipeIdx, isCurrent,
-            label: `#${mesId} 分支${swipeIdx + 1}${annotation.favorite ? " ★" : ""}${annotation.name ? ` · ${annotation.name}` : ""}`, summary: snippet(annotation.note || branchText(this.chat[mesId], swipeIdx)) };
+            annotationName: annotation.name, favorite: annotation.favorite,
+            label: `#${mesId} 分支${swipeIdx + 1} · ${isCurrent ? "当前" : "候选"} · 共${floor.count}个${annotation.favorite ? " ★" : ""}`, summary: snippet(annotation.note || branchText(this.chat[mesId], swipeIdx)) };
     }
 }
 export function createTimelineIndex(chat) {
@@ -55,12 +56,25 @@ function lowerBound(entries, value, key) {
     while (lo < hi) { const mid = (lo + hi) >>> 1; if (key(entries[mid]) < value) lo = mid + 1; else hi = mid; }
     return lo;
 }
-export function createTimelineView(index, { onlyChar = false, onlyBranches = false, includeCandidates = true } = {}) {
+export function createTimelineView(index, { onlyChar = false, onlyBranches = false, includeCandidates = true, favoritesOnly = false, annotatedOnly = false } = {}) {
     const floors = [], entries = [], byId = new Map();
+    const annotationFilter = favoritesOnly || annotatedOnly;
+    const allowed = new Map();
+    const floorOrder = annotationFilter ? new Map(index.floors.map((floor, i) => [floor.mesId, i])) : null;
     let gap = null, maxCount = 1;
     const stats = { floors: 0, totalSwipes: 0, candidates: 0, multiSwipeFloors: 0 };
     for (const floor of index.floors) {
-        if ((onlyChar && floor.role !== '角色') || (onlyBranches && floor.count <= 1)) {
+        let swipes = null;
+        if (annotationFilter) {
+            swipes = new Set();
+            for (let i = 0; i < floor.count; i++) {
+                if (!includeCandidates && i !== floor.currentSwipe) continue;
+                const a = getAnnotation(index.chat[floor.mesId], i);
+                if ((!favoritesOnly || a.favorite) && (!annotatedOnly || a.name.trim() || a.note.trim())) swipes.add(i);
+            }
+            allowed.set(floor.mesId, swipes);
+        }
+        if ((swipes && !swipes.size) || (onlyChar && floor.role !== '角色') || (onlyBranches && floor.count <= 1)) {
             if (!gap) { gap = { id: `gap:${floor.mesId}`, firstMesId: floor.mesId, lastMesId: floor.mesId, count: 0, height: 28 }; entries.push(gap); }
             gap.count++; gap.lastMesId = floor.mesId; continue;
         }
@@ -68,12 +82,16 @@ export function createTimelineView(index, { onlyChar = false, onlyBranches = fal
         const entry = { floor, height: H, index: floors.length };
         floors.push(floor); entries.push(entry); byId.set(floor.mesId, entry);
         maxCount = Math.max(maxCount, floor.count); addStats(stats, floor, 1);
+        if (swipes) {
+            stats.totalSwipes += swipes.size - floor.count;
+            stats.candidates += [...swipes].filter(swipe => swipe !== floor.currentSwipe).length - (floor.count - 1);
+        }
     }
     let y = PAD;
     entries.forEach((entry, i) => { entry.y = y; y += entry.height;
         if (i + 1 < entries.length) y += !entry.floor || !entries[i + 1].floor ? 14 : 72; });
     const centerX = PAD + (includeCandidates ? Math.ceil((maxCount - 1) / 2) : 0) * STEP + W / 2;
-    const view = { index, floors, entries, byId, stats, includeCandidates, centerX,
+    const view = { index, floors, entries, byId, stats, includeCandidates, centerX, annotationFilter, allowed, floorOrder,
         width: centerX * 2, height: Math.max(240, y + PAD), nodeWidth: W, nodeHeight: H };
     view.positions = { get: id => positionFor(view, id), has: id => Boolean(positionFor(view, id)) };
     return view;
@@ -81,6 +99,7 @@ export function createTimelineView(index, { onlyChar = false, onlyBranches = fal
 export function positionFor(view, id) {
     const [mesId, swipe] = String(id).split(':').map(Number), entry = view.byId.get(mesId);
     if (!entry || !Number.isInteger(swipe) || swipe < 0 || swipe >= entry.floor.count) return null;
+    if (view.annotationFilter && !view.allowed.get(mesId)?.has(swipe)) return null;
     const selected = entry.floor.currentSwipe;
     if (!view.includeCandidates && swipe !== selected) return null;
     const candidate = swipe < selected ? swipe + 1 : swipe;
@@ -93,8 +112,10 @@ export function focusTimelineId(view, mesId, swipeIdx) {
     n = Math.min(n, view.floors.length - 1);
     if (n && Math.abs(view.floors[n - 1].mesId - mesId) <= Math.abs(view.floors[n].mesId - mesId)) n--;
     const f = view.floors[n];
-    return f.mesId === mesId && view.includeCandidates && Number.isInteger(swipeIdx) && swipeIdx >= 0 && swipeIdx < f.count
-        ? `${f.mesId}:${swipeIdx}` : f.currentId;
+    const requested = f.mesId === mesId && Number.isInteger(swipeIdx) ? `${f.mesId}:${swipeIdx}` : f.currentId;
+    if (view.positions.has(requested)) return requested;
+    if (view.positions.has(f.currentId)) return f.currentId;
+    return view.annotationFilter ? `${f.mesId}:${view.allowed.get(f.mesId).values().next().value}` : null;
 }
 function swipeAtLane(floor, lane) {
     if (!lane) return floor.currentSwipe;
@@ -103,11 +124,11 @@ function swipeAtLane(floor, lane) {
     return candidate <= floor.currentSwipe ? candidate - 1 : candidate;
 }
 function visibleSwipes(view, floor, rect) {
-    if (!view.includeCandidates) return view.centerX + W / 2 >= rect.left && view.centerX - W / 2 <= rect.right ? [floor.currentSwipe] : [];
+    if (!view.includeCandidates) return view.positions.has(floor.currentId) && view.centerX + W / 2 >= rect.left && view.centerX - W / 2 <= rect.right ? [floor.currentSwipe] : [];
     const min = Math.max(-Math.ceil((floor.count - 1) / 2), Math.ceil((rect.left - view.centerX - W / 2) / STEP));
     const max = Math.min(Math.floor((floor.count - 1) / 2), Math.floor((rect.right - view.centerX + W / 2) / STEP));
     const result = [];
-    for (let lane = min; lane <= max; lane++) { const swipe = swipeAtLane(floor, lane); if (swipe >= 0) result.push(swipe); }
+    for (let lane = min; lane <= max; lane++) { const swipe = swipeAtLane(floor, lane); if (swipe >= 0 && (!view.annotationFilter || view.allowed.get(floor.mesId)?.has(swipe))) result.push(swipe); }
     return result;
 }
 // Cubic y is monotone: y(t)=y1+(y2-y1)*(1.5t-1.5t²+t³).
@@ -155,10 +176,20 @@ export function timelineWindow(view, rect, { overscan = 180, cacheFloors = 20 } 
     const firstFloor = Math.max(1, lowerBound(view.floors, box.top, f => view.byId.get(f.mesId).y));
     for (let n = firstFloor; n < view.floors.length; n++) {
         const target = view.floors[n], previous = view.floors[n - 1];
-        const from = positionFor(view, previous.currentId), to = positionFor(view, target.currentId);
+        const from = positionFor(view, previous.currentId);
+        // A filtered-out selection must never be replaced by a candidate or a synthetic link.
+        if (view.annotationFilter) {
+            const original = view.index.floors;
+            const targetIndex = view.floorOrder.get(target.mesId);
+            if (original[targetIndex - 1] !== previous) continue;
+        }
+        if (!from) continue;
+        const targetEntry = view.byId.get(target.mesId);
+        const targetY = targetEntry.y;
         if (from.y + H > box.bottom) break;
-        if (to.y < box.top) continue;
-        for (const swipe of edgeSwipes(view, target, from.y + H, to.y, box)) {
+        if (targetY < box.top) continue;
+        for (const swipe of edgeSwipes(view, target, from.y + H, targetY, box)) {
+            if (!view.positions.has(`${target.mesId}:${swipe}`)) continue;
             const id = `${target.mesId}:${swipe}`;
             edges.push({ id: `${previous.currentId}>${id}`, from: previous.currentId, to: id,
                 type: swipe === target.currentSwipe ? CURRENT_SELECTION : CANDIDATE_UNKNOWN });

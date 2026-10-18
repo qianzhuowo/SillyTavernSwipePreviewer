@@ -2,18 +2,50 @@
 #st-swipe-tree-modal {
   --st-swipe-char-color: #8b9dff;
   --st-swipe-user-color: #e7ad62;
+  --st-swipe-system-color: #c4a4ef;
+  --st-swipe-char-ink: var(--st-swipe-char-color);
+  --st-swipe-user-ink: var(--st-swipe-user-color);
+  --st-swipe-system-ink: var(--st-swipe-system-color);
+  --st-swipe-char-surface: color-mix(in srgb, var(--st-swipe-char-color) 15%, var(--st-swipe-surface));
+  --st-swipe-user-surface: color-mix(in srgb, var(--st-swipe-user-color) 15%, var(--st-swipe-surface));
+  --st-swipe-system-surface: color-mix(in srgb, var(--st-swipe-system-color) 15%, var(--st-swipe-surface));
 }
 #st-swipe-tree-modal[data-swipe-theme="light"] {
-  --st-swipe-char-color: #4b56a8;
-  --st-swipe-user-color: #a46016;
-  --st-swipe-timeline-grid: #cbd6e3;
+  /* 明亮信号色负责角色辨识，深一档同色系文字确保浅底上的可读性。 */
+  --st-swipe-char-color: #2579e8;
+  --st-swipe-user-color: #ee851f;
+  --st-swipe-system-color: #9551d4;
+  --st-swipe-char-ink: #145cba;
+  --st-swipe-user-ink: #a84800;
+  --st-swipe-system-ink: #7631ba;
+  --st-swipe-char-surface: #e7f0ff;
+  --st-swipe-user-surface: #fff0dc;
+  --st-swipe-system-surface: #f1e7ff;
+  --st-swipe-timeline-grid: #c8cfd7;
 }
-#st-swipe-tree-modal[data-swipe-theme="light"] .st-swipe-timeline-detail-text { color: var(--st-swipe-text); background: #f1f5fa; border-color: var(--st-swipe-border); }
-#st-swipe-tree-modal[data-swipe-theme="light"] .st-swipe-timeline-detail-meta,
-#st-swipe-tree-modal[data-swipe-theme="light"] .st-swipe-timeline-reference-status { color: var(--st-swipe-muted); }
 
-#st-swipe-tree-modal .st-swipe-timeline-legend-char { color: var(--st-swipe-char-color); }
-#st-swipe-tree-modal .st-swipe-timeline-legend-user { color: var(--st-swipe-user-color); }
+#st-swipe-tree-modal .st-swipe-timeline-legend-char {
+  color: var(--st-swipe-char-ink);
+  --st-swipe-legend-color: var(--st-swipe-char-color);
+  --st-swipe-legend-surface: var(--st-swipe-char-surface);
+}
+#st-swipe-tree-modal .st-swipe-timeline-legend-user {
+  color: var(--st-swipe-user-ink);
+  --st-swipe-legend-color: var(--st-swipe-user-color);
+  --st-swipe-legend-surface: var(--st-swipe-user-surface);
+}
+#st-swipe-tree-modal .st-swipe-timeline-legend-system {
+  color: var(--st-swipe-system-ink);
+  --st-swipe-legend-color: var(--st-swipe-system-color);
+  --st-swipe-legend-surface: var(--st-swipe-system-surface);
+}
+#st-swipe-tree-modal[data-swipe-theme="light"] .st-swipe-timeline-role-legend span {
+  padding: 2px 7px;
+  border: 1px solid var(--st-swipe-legend-color, var(--st-swipe-border));
+  border-radius: 999px;
+  background: var(--st-swipe-legend-surface, var(--st-swipe-soft));
+  font-weight: 600;
+}
 #st-swipe-tree-modal .st-swipe-timeline-container {
   width: min(96vw, 1440px);
   max-width: 1440px;
@@ -42,10 +74,10 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  flex: 0 0 28px;
-  width: 28px;
-  min-width: 28px;
-  height: 28px;
+  flex: 0 0 44px;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
   padding: 0;
   margin: 0;
   border: 0;
@@ -73,14 +105,14 @@
   padding: 12px 14px;
   border: 1px solid var(--st-swipe-border);
   border-radius: 10px;
-  background: var(--st-swipe-surface);
-  color: var(--st-swipe-text);
+  background: var(--st-swipe-tooltip-surface);
+  color: var(--st-swipe-tooltip-text);
   box-shadow: 0 4px 16px var(--st-swipe-shadow);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
 }
 #st-swipe-tree-modal .st-swipe-timeline-help-panel[hidden] { display: none; }
-#st-swipe-tree-modal .st-swipe-timeline-help-panel .st-swipe-timeline-legend { flex-direction: column; gap: 8px; }
+#st-swipe-tree-modal .st-swipe-timeline-help-panel .st-swipe-timeline-legend { flex-direction: column; gap: 8px; color: var(--st-swipe-tooltip-muted); }
 #st-swipe-tree-modal .st-swipe-modal-header-top .st-swipe-header-ops { flex: 0 0 auto; margin-inline-start: auto; }
 #st-swipe-tree-modal .st-swipe-timeline-role-legend {
   display: flex;
@@ -96,9 +128,11 @@
 #st-swipe-tree-modal .st-swipe-timeline-status-row .st-swipe-tree-status { min-width: 0; }
 #st-swipe-tree-modal .st-swipe-timeline-status:empty { display: none; }
 #st-swipe-tree-modal .st-swipe-timeline-header > * { flex-shrink: 0; }
+/* 标题行始终保留触控尺寸，混合设备切换 pointer 模式时不改变头部高度。 */
 #st-swipe-tree-modal .st-swipe-header-ops .menu_button {
   width: auto;
-  min-width: 40px;
+  min-width: 44px;
+  min-height: 44px;
   height: auto;
 }
 
@@ -139,7 +173,7 @@
 #st-swipe-tree-modal .st-swipe-timeline-summary-track { position: relative; height: 30px; }
 #st-swipe-tree-modal .st-swipe-timeline-summary-track > button {
   /* 96px chip + 16px gap = branch-tree.js SUMMARY_STEP (112px). */
-  position: absolute; top: 0; width: 96px; max-width: 96px; height: 28px;
+  position: absolute; top: 0; width: 96px; max-width: 96px; min-height: 28px; height: 28px;
   margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 #st-swipe-tree-modal .st-swipe-timeline-summary-track > button::after {
@@ -197,7 +231,8 @@
 #st-swipe-tree-modal .st-swipe-timeline-toolbar,
 #st-swipe-tree-modal .st-swipe-timeline-controls,
 #st-swipe-tree-modal .st-swipe-timeline-detail-heading,
-#st-swipe-tree-modal .st-swipe-timeline-detail-actions {
+#st-swipe-tree-modal .st-swipe-timeline-detail-actions,
+#st-swipe-tree-modal .st-swipe-timeline-detail-annotation-actions {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -217,9 +252,9 @@
 #st-swipe-tree-modal .st-swipe-timeline-toolbar .menu_button,
 #st-swipe-tree-modal .st-swipe-timeline-detail .menu_button {
   width: auto;
-  min-height: 32px;
+  min-height: 36px;
   margin: 0;
-  padding: 4px 8px;
+  padding: 6px 9px;
   font-size: 0.9em;
 }
 #st-swipe-tree-modal .st-swipe-timeline-match-count,
@@ -285,7 +320,9 @@
   gap: 5px;
   min-width: 0;
 }
-#st-swipe-tree-modal .st-swipe-timeline-control-row:last-child { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; }
+/* 筛选首行 1:1:2，新增收藏/标记各占下一行一半；不扩大 224px 工具面板。 */
+#st-swipe-tree-modal .st-swipe-timeline-control-row:last-child { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+#st-swipe-tree-modal :is(.st-swipe-timeline-only-branches, .st-swipe-timeline-favorites, .st-swipe-timeline-annotated) { grid-column: span 2; }
 #st-swipe-tree-modal .st-swipe-timeline-only-branches { white-space: nowrap; }
 #st-swipe-tree-modal .st-swipe-timeline-control-row .menu_button { min-width: 0; padding: 5px; justify-content: center; }
 #st-swipe-tree-modal .st-swipe-timeline-tools-toggle { min-width: 32px; }
@@ -298,7 +335,8 @@
   background: var(--st-swipe-selected);
   box-shadow: inset 0 -2px var(--st-swipe-accent);
 }
-#st-swipe-tree-modal .st-swipe-timeline-search-toggle { min-width: 32px; }
+/* 搜索位于状态行，同样固定触控尺寸，避免切换 pointer 时整个 header 增高。 */
+#st-swipe-tree-modal .st-swipe-timeline-search-toggle { min-width: 44px; min-height: 44px; }
 #st-swipe-tree-modal .st-swipe-timeline-gap {
   position: absolute;
   transform: translate(-50%, -50%);
@@ -325,7 +363,7 @@
   touch-action: pan-x pan-y;
   cursor: grab;
   background-color: var(--st-swipe-soft);
-  background-image: radial-gradient(circle, var(--st-swipe-border) 0.7px, transparent 0.9px);
+  background-image: radial-gradient(circle, var(--st-swipe-timeline-grid, var(--st-swipe-border)) 0.7px, transparent 0.9px);
   background-size: 22px 22px;
 }
 #st-swipe-tree-modal .st-swipe-timeline-panning { cursor: grabbing; user-select: none; }
@@ -368,8 +406,10 @@
   border: 1px solid var(--st-swipe-border);
   border-radius: 12px;
   color: var(--st-swipe-text);
-  --st-swipe-role-color: var(--st-swipe-muted);
-  background: color-mix(in srgb, var(--st-swipe-role-color) 15%, var(--st-swipe-surface));
+  --st-swipe-role-color: var(--st-swipe-system-color);
+  --st-swipe-role-ink: var(--st-swipe-system-ink);
+  --st-swipe-role-surface: var(--st-swipe-system-surface);
+  background: var(--st-swipe-role-surface);
   border-color: var(--st-swipe-role-color);
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
@@ -383,32 +423,59 @@
   pointer-events: auto;
   cursor: pointer;
 }
-#st-swipe-tree-modal .st-swipe-timeline-node[data-role="char"] { --st-swipe-role-color: var(--st-swipe-char-color); }
-#st-swipe-tree-modal .st-swipe-timeline-node[data-role="user"] { --st-swipe-role-color: var(--st-swipe-user-color); }
+#st-swipe-tree-modal .st-swipe-timeline-node[data-role="char"] {
+  --st-swipe-role-color: var(--st-swipe-char-color);
+  --st-swipe-role-ink: var(--st-swipe-char-ink);
+  --st-swipe-role-surface: var(--st-swipe-char-surface);
+}
+#st-swipe-tree-modal .st-swipe-timeline-node[data-role="user"] {
+  --st-swipe-role-color: var(--st-swipe-user-color);
+  --st-swipe-role-ink: var(--st-swipe-user-ink);
+  --st-swipe-role-surface: var(--st-swipe-user-surface);
+}
 #st-swipe-tree-modal .st-swipe-timeline-node-current {
   border: 2px solid var(--st-swipe-role-color);
   box-shadow: inset 4px 0 var(--st-swipe-role-color);
 }
 #st-swipe-tree-modal .st-swipe-timeline-node-candidate { border-style: dashed; }
-#st-swipe-tree-modal .st-swipe-timeline-node:hover { filter: brightness(1.1); }
+#st-swipe-tree-modal .st-swipe-timeline-node:hover {
+  background: color-mix(in srgb, var(--st-swipe-role-color) 23%, var(--st-swipe-surface));
+  border-color: var(--st-swipe-text);
+}
 #st-swipe-tree-modal .st-swipe-timeline-node-selected { outline: 2px solid var(--st-swipe-text); outline-offset: 3px; }
 #st-swipe-tree-modal .st-swipe-timeline-node-match { box-shadow: 0 0 0 3px var(--st-swipe-accent); }
 #st-swipe-tree-modal .st-swipe-timeline-node-match-active { outline: 3px double var(--st-swipe-text); outline-offset: 4px; }
-#st-swipe-tree-modal .st-swipe-timeline-node-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-#st-swipe-tree-modal .st-swipe-timeline-node-role { font-size: 0.85em; color: var(--st-swipe-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 不改 224×116 节点几何：标题/名称各一行，正文有名称两行、无名称三行。 */
+#st-swipe-tree-modal .st-swipe-timeline-node-label,
+#st-swipe-tree-modal .st-swipe-timeline-node-name {
+  display: block;
+  flex: 0 0 auto;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#st-swipe-tree-modal .st-swipe-timeline-node-label { color: var(--st-swipe-role-ink); font-weight: 600; }
+#st-swipe-tree-modal .st-swipe-timeline-node-name { color: var(--st-swipe-text); font-weight: 700; }
+#st-swipe-tree-modal .st-swipe-timeline-node-name[hidden] { display: none; }
+#st-swipe-tree-modal .st-swipe-timeline-node-name[hidden] + .st-swipe-timeline-node-snippet { -webkit-line-clamp: 3; }
 #st-swipe-tree-modal .st-swipe-timeline-node-snippet {
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
   overflow-wrap: anywhere;
+  min-height: 0;
   font-size: 0.9em;
+  line-height: 1.45;
+  color: var(--st-swipe-text);
 }
 
 #st-swipe-tree-modal .st-swipe-timeline-detail {
   flex: 0 0 310px;
   display: grid;
-  grid-template-columns: 24px minmax(0, 1fr);
+  grid-template-columns: 32px minmax(0, 1fr);
   max-width: 40%;
   min-width: 0;
   min-height: 0;
@@ -456,18 +523,45 @@
 #st-swipe-tree-modal .st-swipe-timeline-detail-collapse:hover { background: var(--st-swipe-hover); color: var(--st-swipe-text); }
 #st-swipe-tree-modal .st-swipe-timeline-detail-collapse:focus-visible { outline-offset: -3px; }
 #st-swipe-tree-modal .st-swipe-timeline-detail[hidden] { display: none; }
-#st-swipe-tree-modal .st-swipe-timeline-detail-heading {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: start;
+#st-swipe-tree-modal .st-swipe-timeline-detail-heading { align-items: center; gap: 8px; }
+#st-swipe-tree-modal .st-swipe-timeline-detail-heading strong { flex: 1 1 7em; min-width: 0; align-self: center; }
+#st-swipe-tree-modal .st-swipe-timeline-detail-actions { flex: 0 1 auto; max-width: 100%; flex-wrap: wrap; margin-inline-start: auto; }
+#st-swipe-tree-modal .st-swipe-timeline-detail-actions .menu_button { flex: 0 1 auto; min-width: 36px; }
+#st-swipe-tree-modal .st-swipe-timeline-detail-annotation-actions {
+  margin: 10px 0 12px;
   gap: 8px;
+  align-items: stretch;
 }
-#st-swipe-tree-modal .st-swipe-timeline-detail-heading strong { min-width: 0; align-self: center; }
-#st-swipe-tree-modal .st-swipe-timeline-detail-actions { flex-wrap: nowrap; }
-#st-swipe-tree-modal .st-swipe-timeline-detail-actions .menu_button { flex: 0 0 auto; white-space: nowrap; }
-#st-swipe-tree-modal .st-swipe-timeline-detail-meta { margin: 8px 0; }
-#st-swipe-tree-modal .st-swipe-timeline-detail-text { white-space: pre-wrap; line-height: 1.6; }
-#st-swipe-tree-modal .st-swipe-timeline-detail-meta,
+#st-swipe-tree-modal .st-swipe-timeline-detail-annotation-actions .menu_button {
+  flex: 1 1 auto;
+  min-width: 44px;
+  min-height: 44px;
+  justify-content: center;
+  border-radius: 8px;
+}
+#st-swipe-tree-modal .st-swipe-timeline-detail-text {
+  margin: 0 0 12px;
+  padding: 12px;
+  border: 1px solid var(--st-swipe-border);
+  border-radius: 8px;
+  background: var(--st-swipe-soft);
+  color: var(--st-swipe-text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.7;
+}
+
+/* 名称和完整备注在正文上方独立呈现，未标记时不保留空面板。 */
+#st-swipe-tree-modal .st-swipe-timeline-annotation {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--st-swipe-border);
+  border-inline-start: 3px solid var(--st-swipe-bookmark);
+  border-radius: 8px;
+  background: var(--st-swipe-surface);
+}
+#st-swipe-tree-modal .st-swipe-timeline-annotation .st-swipe-annotation-name { color: var(--st-swipe-text); }
+#st-swipe-tree-modal .st-swipe-timeline-reference-status,
 #st-swipe-tree-modal .st-swipe-timeline-references { color: var(--st-swipe-muted); }
 #st-swipe-tree-modal .st-swipe-timeline-references { border-top: 1px solid var(--st-swipe-border); padding-top: 10px; }
 #st-swipe-tree-modal .st-swipe-timeline-reference-list { margin: 6px 0 0; padding-inline-start: 18px; }
@@ -491,12 +585,24 @@
     border-top: 1px solid var(--st-swipe-border);
     padding: 0;
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: 24px minmax(0, 1fr);
+    grid-template-rows: 44px minmax(0, 1fr);
   }
   #st-swipe-tree-modal .st-swipe-timeline-detail-pane { padding: 8px 10px; }
   #st-swipe-tree-modal .st-swipe-timeline-detail-collapse { border-inline-end: 0; border-bottom: 1px solid var(--st-swipe-border); }
   #st-swipe-tree-modal .st-swipe-timeline-detail-collapse::before { transform: rotate(45deg); }
-  #st-swipe-tree-modal .st-swipe-timeline-toolbar .st-swipe-timeline-search { flex-basis: 100%; }
+  #st-swipe-tree-modal .st-swipe-timeline-toolbar .st-swipe-timeline-search { flex-basis: 100%; min-height: 44px; font-size: max(16px, 1em); }
+}
+
+/* 不改变虚拟时间线节点与概览轨道的几何常量，仅增大实际工具触控区。 */
+@media (max-width: 600px), (pointer: coarse) {
+  #st-swipe-tree-modal .st-swipe-timeline-controls .menu_button,
+  #st-swipe-tree-modal .st-swipe-timeline-tools-toggle,
+  #st-swipe-tree-modal .st-swipe-timeline-toolbar .menu_button,
+  #st-swipe-tree-modal .st-swipe-timeline-detail .menu_button { min-width: 44px; min-height: 44px; }
+}
+
+@media (pointer: coarse) and (min-width: 601px) {
+  #st-swipe-tree-modal .st-swipe-timeline-detail { grid-template-columns: 44px minmax(0, 1fr); }
 }
 
 @media (prefers-reduced-motion: reduce) {

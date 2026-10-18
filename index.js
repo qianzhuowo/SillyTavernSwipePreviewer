@@ -3,14 +3,83 @@ const initialization = (async function () {
   const settingsApi = await import('./settings.mjs');
   const annotations = await import('./annotations.mjs');
   const { editAnnotation } = await import('./annotation-editor.mjs');
+  const { installAnnotationTooltip } = await import('./annotation-tooltip.mjs');
   const hostCompat = await import('./host-compat.mjs');
   const nativeApi = await import('/script.js');
   const { eventSource, event_types: nativeEventTypes } = await import('/scripts/events.js');
   const { installNativeMessageButtons, installNativeTreeEntry, getNativePreviewMessage, prepareOverlayKeyboard, manageOverlayFocus, isTopSwipeOverlay } = await import('./native-integration.mjs');
   let closeActivePreview = null;
   let previewRequest = 0;
+  let timelineAnnotationSaving = false;
 
-  async function openBranchTree({ mesId, swipeIdx, source, isValid } = {}) {
+  // Shared native save transaction: callers own UI lifetime and optimistic identity guards.
+  async function commitChatMutation({ assertContext, originChat, originChatId, originMessage, mesId,
+    isClosed = () => false, onIdentityLost, onSettled, rollback }, change, eventName = 'MESSAGE_SWIPED', eventArgs = [mesId]) {
+      const ctx = assertContext();
+      const eventTypes = ctx.eventTypes || ctx.event_types;
+      if (typeof ctx.saveChat !== 'function') throw new Error('当前酒馆版本不提供聊天保存接口');
+      const backup = structuredClone(originMessage);
+      let result, prepared = null;
+      try {
+        nativeApi.cancelDebouncedChatSave?.();
+        if (ctx.chatMetadata) ctx.chatMetadata.tainted = true;
+        result = await change(originMessage);
+        const afterChange = window.SillyTavern.getContext();
+        if (isClosed() || afterChange.chat !== originChat || afterChange.chatId !== originChatId || afterChange.chat[mesId] !== originMessage) throw new Error('聊天已切换，未保存此次修改');
+        const ensureIdentity = () => {
+          const latest = window.SillyTavern.getContext();
+          if (isClosed() || latest.chat !== originChat || latest.chatId !== originChatId || latest.chat[mesId] !== originMessage) throw new Error('聊天已变化，已停止后续更新');
+          const state = latest.swipe?.state?.();
+          if (nativeApi.isGenerating?.() || (state && state !== 'none')) throw new Error('生成或分支切换已开始，已停止保存');
+        };
+        // Native editing allows listeners to normalize the message before rendering.
+        if (eventName === 'MESSAGE_EDITED' && eventTypes?.MESSAGE_EDITED) {
+          await ctx.eventSource.emit(eventTypes.MESSAGE_EDITED, ...eventArgs);
+          ensureIdentity();
+        }
+        ctx.updateMessageBlock?.(mesId, originMessage);
+        ctx.swipe?.refresh?.(true, false);
+        const event = eventName === 'MESSAGE_EDITED' ? eventTypes?.MESSAGE_UPDATED : eventTypes?.[eventName];
+        if (event) await ctx.eventSource.emit(event, ...eventArgs);
+        ensureIdentity();
+        if (originMessage.swipes?.length) {
+          // Track only our own prepareSwipes identity replacement for selective rollback.
+          const before = originMessage.swipe_info, beforeEntries = before?.slice();
+          swipeData.prepareSwipes(originMessage);
+          prepared = { before, beforeEntries, after: originMessage.swipe_info,
+            afterEntries: originMessage.swipe_info.slice() };
+        }
+        if (nativeApi.isChatSaving) throw new Error('酒馆正在保存其他修改，请稍后重试');
+        nativeApi.cancelDebouncedChatSave?.();
+        await ctx.saveChat();
+        const afterSave = window.SillyTavern.getContext();
+        if (afterSave.chat !== originChat || afterSave.chatId !== originChatId || afterSave.chat[mesId] !== originMessage) {
+          window.toastr?.warning?.('保存期间聊天发生切换，请重新打开原聊天确认修改是否保存');
+          onIdentityLost?.();
+        }
+      } catch (error) {
+        if (rollback) rollback({ prepared });
+        else {
+          for (const key of Object.keys(originMessage)) delete originMessage[key];
+          Object.assign(originMessage, backup);
+        }
+        if (window.SillyTavern.getContext().chat[mesId] === originMessage) {
+          ctx.updateMessageBlock?.(mesId, originMessage);
+          ctx.swipe?.refresh?.(true, false);
+          // Rollback must invalidate timeline/search and other event-driven consumers too.
+          if (eventTypes?.MESSAGE_UPDATED) {
+            try { await ctx.eventSource.emit(eventTypes.MESSAGE_UPDATED, mesId); }
+            catch (syncError) { console.error('[Swipe Previewer] rollback UI sync failed', syncError); }
+          }
+        }
+        throw error;
+      } finally {
+        onSettled?.();
+      }
+      return result;
+  }
+
+  async function openBranchTree({ mesId, swipeIdx, source, isValid, refreshSource } = {}) {
     const origin = window.SillyTavern?.getContext?.();
     const originChat = origin?.chat;
     const originChatId = origin?.chatId;
@@ -32,6 +101,37 @@ const initialization = (async function () {
         focusMesId: fallbackId,
         focusSwipeIdx: swipeIdx,
         onPreview: (id, idx) => onPreviewClick(id, null, idx),
+        onAnnotationChange: async ({ mesId: id, swipeIdx: idx, message, value, isValid: valid, isActive }) => {
+          const ctx = window.SillyTavern.getContext();
+          const chat = ctx.chat, chatId = ctx.chatId;
+          const assertContext = () => {
+            const now = window.SillyTavern.getContext();
+            if (!valid() || now.chat !== chat || now.chatId !== chatId || now.chat[id] !== message)
+              throw new Error('聊天或分支已变化，请重新打开详情');
+            if (message.tt_swipe_cold || message.is_user || message.is_system || message.extra?.isSmallSys
+              || !Array.isArray(message.swipes) || idx < 0 || idx >= message.swipes.length)
+              throw new Error('此分支为只读，不能保存标记');
+            const state = now.swipe?.state?.();
+            if (nativeApi.isGenerating?.() || (state && state !== 'none')) throw new Error('请等待生成或分支切换完成');
+            if (nativeApi.isChatSaving) throw new Error('酒馆正在保存聊天，请稍后重试');
+            if (document.querySelector('#chat .mes .edit_textarea')) throw new Error('请先完成消息编辑');
+            return now;
+          };
+          const rollback = annotations.createAnnotationRollback(message, idx);
+          timelineAnnotationSaving = true;
+          try {
+            await commitChatMutation({ assertContext, originChat: chat, originChatId: chatId,
+              originMessage: message, mesId: id, isClosed: () => !isActive(), rollback },
+              message => {
+                const result = annotations.setAnnotation(message, idx, value);
+                rollback.capture();
+                return result;
+              }, 'MESSAGE_UPDATED', [id]);
+          } finally {
+            timelineAnnotationSaving = false;
+            await refreshSource?.();
+          }
+        },
         onClose: (reason) => {
           if (source?.isConnected) source.hidden = false;
           if (reason === 'locate') { closeActivePreview?.(); return; }
@@ -351,6 +451,11 @@ const initialization = (async function () {
     const contentEl = modalOverlay.querySelector(`#${modalId}-content`);
     const jumpListEl = modalOverlay.querySelector(`#${modalId}-jump-list`);
     const titleEl = modalOverlay.querySelector('.st-swipe-title');
+    const annotationTooltip = installAnnotationTooltip({
+      overlay: modalOverlay, list: jumpListEl,
+      getAnnotation: idx => annotations.getAnnotation(originMessage, idx),
+      isAvailable: () => !closed && !busy && isTopSwipeOverlay(modalOverlay),
+    });
 
     // 可选：应用酒馆正则（global + scoped + preset）
     async function importRegexEngine() {
@@ -414,39 +519,31 @@ const initialization = (async function () {
 
     const renderJumpList = () => {
       if (!jumpListEl) return;
-      jumpListEl.innerHTML = swipes.map((_, idx) => `
-        <button type="button" class="st-swipe-jump-item ${idx === currentSwipeId ? 'active' : ''}" data-idx="${idx}" ${idx === currentSwipeId ? 'aria-current="true"' : ''}>${idx + 1}</button>
-      `).join('');
-      jumpListEl.querySelectorAll('[data-idx]').forEach(button => {
-        const idx = Number(button.dataset.idx), a = annotations.getAnnotation(originMessage, idx);
-        button.title = [a.name || `分支 #${idx + 1}`, a.note].filter(Boolean).join(' — ');
-        if (a.favorite) button.append(' ★');
-        if (a.name) button.append(` · ${a.name}`);
-      });
+      annotationTooltip.hide();
+      jumpListEl.innerHTML = swipes.map((_, idx) => {
+        const a = annotations.getAnnotation(originMessage, idx);
+        const annotated = !!(a.name || a.note.trim());
+        return `<button type="button" class="st-swipe-jump-item ${idx === currentSwipeId ? 'active' : ''}" data-idx="${idx}" data-favorite="${a.favorite}" data-annotated="${annotated}" ${idx === currentSwipeId ? 'aria-current="true"' : ''}><span class="st-swipe-jump-number">${idx + 1}</span>${a.favorite || annotated ? `<span class="st-swipe-jump-markers" aria-hidden="true">${a.favorite ? '<span class="st-swipe-jump-favorite"></span>' : ''}${annotated ? '<span class="st-swipe-jump-bookmark"></span>' : ''}</span>` : ''}</button>`;
+      }).join('');
     };
 
     const renderCardsMarkup = () => {
       const escapeAttr = value => String(value ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-      const annotationMarkup = idx => {
-        const a = annotations.getAnnotation(originMessage, idx);
-        return `<div class="st-swipe-annotation-summary" data-annotation-idx="${idx}">
-          <span class="st-swipe-annotation-name">${escapeAttr(a.name || `分支 #${idx + 1}`)}</span>
-          ${a.favorite ? '<span class="st-swipe-favorite-indicator" title="已收藏">★</span>' : ''}
-          ${a.note ? `<span class="st-swipe-annotation-note">${escapeAttr(a.note)}</span>` : ''}
-        </div>`;
-      };
+      const noteMarkup = (a, idx) => a.note.trim()
+        ? `<div class="st-swipe-annotation-summary st-swipe-card-annotation" data-annotation-idx="${idx}"><div class="st-swipe-annotation-note">${escapeAttr(a.note)}</div></div>` : '';
       if (!contentEl) return;
       if (!swipes.length) {
         contentEl.innerHTML = '<div class="st-swipe-loading">当前消息没有可展示的分支</div>';
         return;
       }
 
-      contentEl.innerHTML = swipes.map((_, idx) => `
+      contentEl.innerHTML = swipes.map((_, idx) => {
+        const a = annotations.getAnnotation(originMessage, idx);
+        return `
           <div class="st-swipe-card ${idx === currentSwipeId ? 'active' : ''}" id="${modalId}-card-${idx}" data-idx="${idx}">
             <div class="st-swipe-card-header">
               <div class="st-swipe-card-badge">
-                <span>分支 #${idx + 1} ${idx === currentSwipeId ? '(当前选中)' : ''}</span>
-                ${annotationMarkup(idx)}
+                <span class="st-swipe-card-label"><span class="st-swipe-card-number">分支 #${idx + 1} ${idx === currentSwipeId ? '(当前选中)' : ''}</span>${a.name ? ` <span class="st-swipe-annotation-name st-swipe-card-name">${escapeAttr(a.name)}</span>` : ''}</span>
                 <button class="menu_button st-swipe-action-render-one" data-idx="${idx}" title="单独开启/关闭渲染预览">
                   <i class="fa-solid fa-code"></i>
                 </button>
@@ -455,7 +552,7 @@ const initialization = (async function () {
                 <button class="menu_button st-swipe-action-switch" data-idx="${idx}">切换楼层内容</button>
                 <button class="menu_button st-swipe-action-branch" data-idx="${idx}">创建新存档</button>
                 <button class="menu_button st-swipe-action-annotate" data-idx="${idx}">命名/备注</button>
-                <button class="menu_button st-swipe-action-favorite ${annotations.getAnnotation(originMessage, idx).favorite ? 'active' : ''}" data-idx="${idx}" aria-pressed="${annotations.getAnnotation(originMessage, idx).favorite}">★</button>
+                <button type="button" class="menu_button st-swipe-action-favorite ${a.favorite ? 'active' : ''}" data-idx="${idx}" aria-pressed="${a.favorite}" aria-label="${a.favorite ? '取消收藏' : '收藏此分支'}" title="${a.favorite ? '取消收藏' : '收藏此分支'}"><span class="st-swipe-star" aria-hidden="true">${a.favorite ? '★' : '☆'}</span></button>
                 <button class="menu_button st-swipe-action-edit" data-idx="${idx}">编辑分支</button>
                 <button class="menu_button st-swipe-action-move-up" data-idx="${idx}" ${idx === 0 ? 'disabled' : ''}>上移</button>
                 <button class="menu_button st-swipe-action-move-down" data-idx="${idx}" ${idx === swipes.length - 1 ? 'disabled' : ''}>下移</button>
@@ -463,11 +560,13 @@ const initialization = (async function () {
             </div>
 
             <div class="st-swipe-card-body">
+              ${noteMarkup(a, idx)}
               <div class="st-swipe-card-text" id="${modalId}-text-${idx}"></div>
               <iframe class="st-swipe-card-frame" id="${modalId}-frame-${idx}" sandbox="allow-scripts" referrerpolicy="no-referrer" loading="lazy"></iframe>
             </div>
           </div>
-        `).join('');
+        `;
+      }).join('');
     };
 
     // 渲染逻辑（iframe 预览）
@@ -1096,8 +1195,12 @@ const initialization = (async function () {
         if (selectionMode) button.setAttribute('aria-pressed', String(checked));
         else button.removeAttribute('aria-pressed');
         const state = `${idx === currentSwipeId ? '，当前楼层分支' : ''}${checked ? '，待删选中' : selectionMode ? '，未选中' : ''}`;
-        button.title = `分支 ${idx + 1}${state}；${selectionMode ? '点击切换选择' : '点击定位预览'}`;
-        button.setAttribute('aria-label', button.title);
+        const a = annotations.getAnnotation(originMessage, idx);
+        const label = `分支 ${idx + 1}${state}${a.favorite ? '，已收藏' : ''}；${selectionMode ? '点击切换选择' : '点击定位预览'}`;
+        const info = [a.name, a.note.trim() ? a.note : ''].filter(Boolean).join('；');
+        if (info) button.removeAttribute('title'); // The custom tooltip also supports touch and multiline notes.
+        else button.title = label;
+        button.setAttribute('aria-label', info ? `${label}；${info}` : label);
       });
     }
 
@@ -1134,49 +1237,9 @@ const initialization = (async function () {
     }
 
     async function commitMutation(change, eventName = 'MESSAGE_SWIPED', eventArgs = [mesId]) {
-      const ctx = assertContext();
-      if (typeof ctx.saveChat !== 'function') throw new Error('当前酒馆版本不提供聊天保存接口');
-      const backup = structuredClone(originMessage);
-      let result;
-      try {
-        nativeApi.cancelDebouncedChatSave?.();
-        if (ctx.chatMetadata) ctx.chatMetadata.tainted = true;
-        result = await change(originMessage);
-        const afterChange = window.SillyTavern.getContext();
-        if (closed || afterChange.chatId !== originChatId || afterChange.chat[mesId] !== originMessage) throw new Error('聊天已切换，未保存此次修改');
-        const ensureIdentity = () => {
-          const latest = window.SillyTavern.getContext();
-          if (closed || latest.chatId !== originChatId || latest.chat[mesId] !== originMessage) throw new Error('聊天已变化，已停止后续更新');
-        };
-        // Native editing allows listeners to normalize the message before rendering.
-        if (eventName === 'MESSAGE_EDITED' && eventTypes?.MESSAGE_EDITED) {
-          await ctx.eventSource.emit(eventTypes.MESSAGE_EDITED, ...eventArgs);
-          ensureIdentity();
-        }
-        ctx.updateMessageBlock?.(mesId, originMessage);
-        ctx.swipe?.refresh?.(true, false);
-        const event = eventName === 'MESSAGE_EDITED' ? eventTypes?.MESSAGE_UPDATED : eventTypes?.[eventName];
-        if (event) await ctx.eventSource.emit(event, ...eventArgs);
-        ensureIdentity();
-        if (originMessage.swipes?.length) swipeData.prepareSwipes(originMessage);
-        if (nativeApi.isChatSaving) throw new Error('酒馆正在保存其他修改，请稍后重试');
-        await ctx.saveChat();
-        const afterSave = window.SillyTavern.getContext();
-        if (afterSave.chatId !== originChatId || afterSave.chat[mesId] !== originMessage) {
-          window.toastr?.warning?.('保存期间聊天发生切换，请重新打开原聊天确认修改是否保存');
-          closeModal();
-        }
-      } catch (error) {
-        for (const key of Object.keys(originMessage)) delete originMessage[key];
-        Object.assign(originMessage, backup);
-        if (window.SillyTavern.getContext().chat[mesId] === originMessage) {
-          ctx.updateMessageBlock?.(mesId, originMessage);
-          ctx.swipe?.refresh?.(true, false);
-        }
-        throw error;
-      } finally {
-        observedSignature = signature();
-      }
+      const result = await commitChatMutation({ assertContext, originChat, originChatId, originMessage, mesId,
+        isClosed: () => closed, onIdentityLost: closeModal, onSettled: () => { observedSignature = signature(); } },
+        change, eventName, eventArgs);
       message.swipes = originMessage.swipes;
       message.swipe_id = originMessage.swipe_id;
       return result;
@@ -1437,6 +1500,10 @@ const initialization = (async function () {
           if (value === null) return;
           await commitMutation(message => annotations.setAnnotation(message, idx, value), null);
           await refreshModalList({ focusIdx: idx });
+          // Rebuilding cards removes the editor's original return-focus target.
+          if (!closed && isTopSwipeOverlay(modalOverlay)) {
+            modalOverlay.querySelector(`.st-swipe-action-annotate[data-idx="${idx}"]`)?.focus({ preventScroll: true });
+          }
         });
         return;
       }
@@ -1483,7 +1550,7 @@ const initialization = (async function () {
     bindChatEvent('CHAT_CHANGED', closeModal);
     bindChatEvent('GENERATION_STARTED', closeModal);
     const onExternalUpdate = () => {
-      if (busy || closed) return;
+      if (busy || closed || (timelineAnnotationSaving && modalOverlay.hidden)) return;
       // Index-based selection must never survive externally reordered/removed messages.
       closeModal();
     };
@@ -1495,7 +1562,8 @@ const initialization = (async function () {
     modalOverlay.querySelector(`#${modalId}-tree`)?.addEventListener('click', () => {
       if (busy || closed) return;
       void openBranchTree({ mesId, swipeIdx: currentViewIdx, source: modalOverlay,
-        isValid: () => !closed && modalOverlay.isConnected });
+        isValid: () => !closed && modalOverlay.isConnected,
+        refreshSource: async () => { if (!closed) { observedSignature = signature(); await refreshModalList(); } } });
     });
 
     // Bind dismissal before any initial async rendering/import can stall.
@@ -1553,6 +1621,7 @@ const initialization = (async function () {
     function closeModal() {
       if (closed) return;
       closed = true;
+      annotationTooltip.dispose();
       cancelEdit?.();
       releaseFocus();
       previewObserver.disconnect();
@@ -1564,6 +1633,7 @@ const initialization = (async function () {
 
     function onKeydown(e) {
       if (e.key === 'Escape' && isTopSwipeOverlay(modalOverlay)) {
+        if (annotationTooltip.hide()) return;
         if (selectionMode && !busy) {
           e.preventDefault();
           setSelectionMode(false);

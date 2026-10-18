@@ -1,53 +1,12 @@
 @import url('./timeline.css');
 
-/* Original host-linked palette remains the default night mode. */
-.st-swipe-modal-overlay[data-swipe-theme="light"] {
-  color-scheme: light;
-  --st-swipe-surface: #f8fafc;
-  --st-swipe-text: #243247;
-  --st-swipe-muted: #59687c;
-  --st-swipe-border: #c6d1df;
-  --st-swipe-accent: #325ead;
-  --st-swipe-focus: #2356aa;
-  --st-swipe-shadow: rgb(25 45 75 / 18%);
-  --st-swipe-soft: #edf2f8;
-  --st-swipe-hover: #e0e9f5;
-  --st-swipe-selected: #e0eafa;
-  --st-swipe-previewer-md-em-color: #687185;
-  --st-swipe-previewer-md-strong-color: #243247;
-  --st-swipe-previewer-md-quote-color: #325ead;
-  --st-swipe-previewer-md-quote-bg: #e5edfa;
-  background: rgb(36 50 71 / 25%);
-  text-shadow: none;
-}
-.st-swipe-modal-overlay[data-swipe-theme="light"] :is(.text_pole, input, textarea, select) {
-  color: var(--st-swipe-text);
-  background: #fff;
-  border-color: var(--st-swipe-border);
-  text-shadow: none;
-  accent-color: var(--st-swipe-accent);
-}
-.st-swipe-modal-overlay[data-swipe-theme="light"] :is(button, .menu_button) { text-shadow: none; }
-.st-swipe-modal-overlay .st-swipe-theme-toggle { min-width: 32px; font: inherit; font-size: 1.2em; }
-.st-swipe-annotation-summary { display: flex; flex-wrap: wrap; gap: 4px 8px; min-width: 0; }
-.st-swipe-annotation-name { font-weight: 600; overflow-wrap: anywhere; }
-.st-swipe-favorite-indicator { color: var(--st-swipe-accent); }
-.st-swipe-annotation-note { flex-basis: 100%; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--st-swipe-muted); font-weight: normal; }
-.st-swipe-card .st-swipe-annotation-note { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-.st-swipe-annotation-editor { width: min(94vw, 640px); height: auto; max-height: 90dvh; }
-.st-swipe-annotation-fields label { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.st-swipe-annotation-fields :is(input:not([type="checkbox"]), textarea) { width: 100%; margin: 0; }
-.st-swipe-annotation-fields textarea { resize: vertical; min-height: 100px; }
-.st-swipe-card-badge { min-width: 0; flex-wrap: wrap; }
-.st-swipe-card-badge .st-swipe-annotation-summary { flex-basis: 100%; }
-
-
 /* SillyTavern 主题桥接：无宿主变量时使用系统颜色，不强制深色。 */
 :root {
   --st-swipe-surface: var(--SmartThemeBlurTintColor, Canvas);
   --st-swipe-text: var(--SmartThemeBodyColor, CanvasText);
   --st-swipe-muted: var(--SmartThemeEmColor, GrayText);
   --st-swipe-border: var(--SmartThemeBorderColor, GrayText);
+  --st-swipe-control-border: var(--st-swipe-border);
   --st-swipe-accent: var(--SmartThemeQuoteColor, Highlight);
   /* 宿主默认焦点色固定为白色；改用主题正文色兼容浅色主题。 */
   --st-swipe-focus: var(--st-swipe-text);
@@ -55,7 +14,65 @@
   --st-swipe-soft: color-mix(in srgb, var(--st-swipe-text) 5%, transparent);
   --st-swipe-hover: color-mix(in srgb, var(--st-swipe-text) 12%, transparent);
   --st-swipe-selected: color-mix(in srgb, var(--st-swipe-accent) 12%, transparent);
+  --st-swipe-gold: #efb55d;
+  --st-swipe-gold-edge: #a56f25;
+  --st-swipe-bookmark: #90c8ce;
+  --st-swipe-tooltip-surface: #252c36;
+  --st-swipe-tooltip-text: #f1f4f8;
+  --st-swipe-tooltip-muted: #d1d9e4;
 }
+
+/* 日间独立调色板；夜间继续沿用宿主基调，不继承宿主的浅色按钮文字。 */
+.st-swipe-modal-overlay[data-swipe-theme="light"] {
+  color-scheme: light;
+  --st-swipe-surface: #faf9f6;
+  --st-swipe-text: #202b39;
+  --st-swipe-muted: #505d6d;
+  --st-swipe-border: #aeb8c3;
+  --st-swipe-control-border: #7b8898;
+  --st-swipe-accent: #285e7b;
+  --st-swipe-focus: #176c85;
+  --st-swipe-shadow: rgb(31 44 60 / 18%);
+  --st-swipe-soft: #f0f2f3;
+  --st-swipe-hover: #e3eaf0;
+  --st-swipe-selected: #e2edf2;
+  --st-swipe-gold: #f5b333;
+  --st-swipe-gold-edge: #a16008;
+  --st-swipe-bookmark: #22676a;
+  --st-swipe-tooltip-surface: #fffefa;
+  --st-swipe-tooltip-text: #202b39;
+  --st-swipe-tooltip-muted: #505d6d;
+  --st-swipe-previewer-md-em-color: #505d6d;
+  --st-swipe-previewer-md-strong-color: #202b39;
+  --st-swipe-previewer-md-quote-color: #285e7b;
+  --st-swipe-previewer-md-quote-bg: #e2edf2;
+  /* 这些别名必须在浅色 overlay 上重新解析，避免继承 :root 的宿主浅色字。 */
+  --st-swipe-previewer-md-quote-color-cn: var(--st-swipe-accent);
+  --st-swipe-previewer-md-quote-color-en: var(--st-swipe-accent);
+  --st-swipe-previewer-md-quote-color-jp: var(--st-swipe-accent);
+  --st-swipe-previewer-md-quote-color-jp2: var(--st-swipe-accent);
+  --st-swipe-previewer-md-del-line: var(--st-swipe-muted);
+  --st-swipe-previewer-md-del-bg: var(--st-swipe-soft);
+  --st-swipe-previewer-md-blockquote-bg: var(--st-swipe-soft);
+  background: rgb(30 40 54 / 30%);
+  text-shadow: none;
+}
+
+.st-swipe-modal-overlay[data-swipe-theme="light"] :is(.text_pole, input, textarea, select) {
+  color: var(--st-swipe-text);
+  background: #fffefa;
+  border: 1px solid var(--st-swipe-control-border);
+  text-shadow: none;
+  box-shadow: none;
+  accent-color: var(--st-swipe-accent);
+}
+
+.st-swipe-modal-overlay[data-swipe-theme="light"] :is(input, textarea)::placeholder {
+  color: var(--st-swipe-muted);
+  opacity: 1;
+}
+
+.st-swipe-modal-overlay .st-swipe-theme-toggle { min-width: 36px; font: inherit; font-size: 1.2em; }
 
 /* 遮罩层 */
 .st-swipe-modal-overlay {
@@ -164,21 +181,75 @@
 }
 
 .st-swipe-jump-item {
-  width: 30px;
-  height: 30px;
-  display: flex;
+  position: relative;
+  appearance: none;
+  min-width: 44px;
+  width: auto;
+  height: 44px;
+  margin: 0;
+  padding: 7px 11px;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   background: var(--st-swipe-soft);
   color: var(--st-swipe-text);
-  border: 1px solid var(--st-swipe-border);
-  border-radius: 4px;
+  border: 1px solid var(--st-swipe-control-border);
+  border-radius: 7px;
   cursor: pointer;
-  font-size: 0.85em;
-  flex-shrink: 0;
+  font-family: inherit;
+  font-size: max(17px, 1.075em);
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  flex: 0 0 auto;
   transition: background-color var(--animation-duration-2x, 0.2s) ease, border-color var(--animation-duration-2x, 0.2s) ease;
   user-select: none;
+  touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
+}
+
+.st-swipe-jump-number { position: relative; white-space: nowrap; }
+
+/* 标记仅占四角，不进入数字排版，也不复用 active/selected 的伪元素。 */
+.st-swipe-jump-markers {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.st-swipe-jump-markers:empty { display: none; }
+
+.st-swipe-jump-favorite {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 12px;
+  height: 12px;
+  background: linear-gradient(45deg, var(--st-swipe-gold-edge) 54%, var(--st-swipe-gold) 54%);
+  clip-path: polygon(0 0, 100% 0, 100% 100%);
+}
+
+.st-swipe-jump-bookmark {
+  position: absolute;
+  right: 2px;
+  bottom: 3px;
+  width: 8px;
+  height: 11px;
+  border-radius: 1px 1px 0 0;
+  background: var(--st-swipe-bookmark);
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 70%, 0 100%);
+}
+
+.st-swipe-jump-bookmark::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  right: 2px;
+  height: 1px;
+  background: var(--st-swipe-surface);
 }
 
 .st-swipe-jump-item:hover {
@@ -228,13 +299,24 @@
 }
 
 .st-swipe-card-badge {
-  font-size: 0.75em;
-  font-weight: bold;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 180px;
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
+  font-size: 0.875em;
+  font-weight: 600;
   color: var(--st-swipe-muted);
-  margin-bottom: 0;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  line-height: 1.6;
 }
+
+/* label 内是普通 inline 文本：名称紧随编号，剩余宽度不足才自然折行。 */
+.st-swipe-card-label { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.st-swipe-card-number { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.st-swipe-card-name { display: inline; margin-inline-start: 0.55em; color: var(--st-swipe-text); }
+.st-swipe-card-name:empty { display: none; }
 
 .st-swipe-card.active .st-swipe-card-badge {
   color: var(--st-swipe-accent);
@@ -260,19 +342,11 @@
   min-width: 0;
 }
 
-.st-swipe-card-badge {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 0;
-  min-width: 0;
-  flex-wrap: wrap;
-}
-
 .st-swipe-card-badge .st-swipe-action-render-one {
-  width: 26px;
-  height: 26px;
-  padding: 0 !important;
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  padding: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -281,41 +355,11 @@
 /* 卡片操作按钮 */
 .st-swipe-card-actions {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
   margin-bottom: 0;
   min-width: 0;
   max-width: 100%;
-}
-
-.st-swipe-action-switch,
-.st-swipe-action-branch,
-.st-swipe-action-edit,
-.st-swipe-action-move-up,
-.st-swipe-action-move-down,
-.st-swipe-action-delete {
-  padding: 4px 8px;
-  border-radius: 6px;
-}
-
-.st-swipe-action-delete {
-  color: var(--st-swipe-text);
-  border-color: var(--st-swipe-accent);
-  border-style: dashed;
-}
-
-.st-swipe-action-delete:hover:not(:disabled) {
-  background: var(--st-swipe-selected);
-  border-color: var(--st-swipe-accent);
-}
-
-.st-swipe-card-actions .menu_button:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-.st-swipe-card-actions .menu_button:disabled:hover {
-  transform: none;
 }
 
 .st-swipe-edit-textarea {
@@ -346,7 +390,138 @@
 /* 卡片正文：文本/iframe 二选一 */
 .st-swipe-card-body {
   width: 100%;
+  min-width: 0;
 }
+
+/* 名称与备注按需创建；空壳也不会留下边框、间距或空行。 */
+.st-swipe-annotation-summary {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  line-height: 1.6;
+}
+
+.st-swipe-annotation-name { font-weight: 600; overflow-wrap: anywhere; }
+.st-swipe-annotation-note {
+  min-width: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--st-swipe-muted);
+  font-weight: normal;
+}
+
+.st-swipe-card-annotation {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  background: var(--st-swipe-surface);
+  border: 1px solid var(--st-swipe-border);
+  border-inline-start: 3px solid var(--st-swipe-bookmark);
+  border-radius: 7px;
+  font-size: 0.9em;
+}
+
+.st-swipe-annotation-summary:empty,
+.st-swipe-annotation-name:empty,
+.st-swipe-annotation-note:empty { display: none; }
+
+/* 独立于可滚动容器；overlay 的局部层叠上下文将其限制在嵌套 modal 以下。 */
+.st-swipe-annotation-tooltip {
+  position: fixed;
+  z-index: 10;
+  display: grid;
+  gap: 8px;
+  width: min(320px, calc(100vw - 24px));
+  max-height: min(50vh, 320px);
+  max-height: min(50dvh, 320px);
+  padding: 14px 16px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid var(--st-swipe-border);
+  border-radius: 10px;
+  background: var(--st-swipe-tooltip-surface);
+  color: var(--st-swipe-tooltip-text);
+  box-shadow: 0 8px 24px var(--st-swipe-shadow);
+  font-size: 0.9em;
+  line-height: 1.65;
+  text-align: start;
+  text-shadow: none;
+  overflow-wrap: anywhere;
+  pointer-events: auto;
+  user-select: text;
+}
+
+.st-swipe-annotation-tooltip .st-swipe-annotation-note { color: var(--st-swipe-tooltip-muted); }
+
+/* 注释编辑器：紧凑标题、清晰字段和可触控底部操作。 */
+#st-swipe-annotation-modal .st-swipe-annotation-editor {
+  width: min(100%, 600px);
+  height: auto;
+  max-height: min(90vh, 760px);
+  max-height: min(90dvh, 760px);
+  border-radius: 14px;
+}
+
+#st-swipe-annotation-modal .st-swipe-annotation-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: 0 0 auto;
+  gap: 12px;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--st-swipe-border);
+}
+
+#st-swipe-annotation-modal .st-swipe-annotation-heading { min-width: 0; overflow-wrap: anywhere; }
+#st-swipe-annotation-modal .st-swipe-annotation-eyebrow {
+  margin: 0 0 4px;
+  color: var(--st-swipe-muted);
+  font-size: 0.75em;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+#st-swipe-annotation-modal h3 { margin: 0; color: var(--st-swipe-text); font-size: 1.12em; line-height: 1.4; }
+#st-swipe-annotation-modal .st-swipe-header-ops { flex: 0 0 auto; width: auto; flex-wrap: nowrap; }
+#st-swipe-annotation-modal .st-swipe-annotation-fields { gap: 18px; padding: 20px; }
+#st-swipe-annotation-modal .st-swipe-annotation-field { display: grid; gap: 7px; min-width: 0; margin: 0; }
+#st-swipe-annotation-modal .st-swipe-annotation-label { color: var(--st-swipe-text); font-size: 0.9em; font-weight: 600; }
+#st-swipe-annotation-modal :is(input, textarea) {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--st-swipe-control-border);
+  border-radius: 8px;
+  background: var(--st-swipe-soft);
+  color: var(--st-swipe-text);
+  font: inherit;
+  line-height: 1.6;
+  box-shadow: none;
+  text-shadow: none;
+}
+#st-swipe-annotation-modal :is(input, textarea)::placeholder {
+  color: var(--st-swipe-muted);
+  opacity: 1;
+  -webkit-text-fill-color: currentColor;
+  text-shadow: none;
+}
+#st-swipe-annotation-modal input { min-height: 44px; }
+#st-swipe-annotation-modal textarea { min-height: 152px; max-height: 40vh; max-height: 40dvh; resize: vertical; }
+#st-swipe-annotation-modal :is(input, textarea):focus { border-color: var(--st-swipe-focus); }
+#st-swipe-annotation-modal .st-swipe-annotation-hint { margin: 0; color: var(--st-swipe-muted); font-size: 0.82em; line-height: 1.6; }
+#st-swipe-annotation-modal .st-swipe-annotation-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid var(--st-swipe-border);
+}
+#st-swipe-annotation-modal .st-swipe-annotation-footer .menu_button { min-height: 44px; padding: 8px 14px; border-radius: 8px; }
+#st-swipe-annotation-modal .st-swipe-edit-actions { margin-inline-start: auto; min-width: 0; flex-wrap: wrap; }
 
 .st-swipe-card-frame {
   display: none;
@@ -598,30 +773,154 @@
   }
 }
 
-/* 宿主 menu_button 保留颜色/边框约定，仅修正模态内的尺寸和交互。 */
+/* 控件由插件变量控制，隔离宿主 menu_button 的浅色文字、滤镜和悬停背景。 */
 .st-swipe-modal-overlay .menu_button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: auto;
   max-width: 100%;
-  min-height: 32px;
+  min-height: 36px;
   margin: 0;
+  padding: 6px 10px;
   gap: 6px;
+  border: 1px solid var(--st-swipe-button-border, var(--st-swipe-control-border));
+  border-radius: 7px;
+  background: var(--st-swipe-button-bg, var(--st-swipe-surface));
+  color: var(--st-swipe-button-text, var(--st-swipe-text));
+  font-size: 0.9em;
+  line-height: 1.4;
+  text-align: center;
+  text-shadow: none;
+  filter: none;
   white-space: normal;
   overflow-wrap: anywhere;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: background-color 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
 }
 
-.st-swipe-modal-overlay .menu_button:not(.disabled):not([disabled]):hover {
-  background-color: var(--st-swipe-hover);
+.st-swipe-modal-overlay[data-swipe-theme="light"] .menu_button {
+  color: var(--st-swipe-button-text, var(--st-swipe-text));
+  background: var(--st-swipe-button-bg, var(--st-swipe-surface));
+  border-color: var(--st-swipe-button-border, var(--st-swipe-control-border));
+  text-shadow: none;
+  filter: none;
 }
 
 .st-swipe-modal-overlay .menu_button:not(.disabled):not([disabled]).active {
-  background-color: var(--st-swipe-selected);
-  border-color: var(--st-swipe-accent);
+  background: var(--st-swipe-button-active, var(--st-swipe-selected));
+  border-color: var(--st-swipe-button-active-border, var(--st-swipe-accent));
+}
+
+.st-swipe-modal-overlay .menu_button:not(.disabled):not([disabled]):hover {
+  background: var(--st-swipe-button-hover, var(--st-swipe-hover));
+  border-color: var(--st-swipe-button-hover-border, var(--st-swipe-accent));
+}
+
+.st-swipe-modal-overlay .st-swipe-action-delete {
+  --st-swipe-button-border: var(--st-swipe-accent);
+  --st-swipe-button-hover: var(--st-swipe-selected);
+  border-style: dashed;
+}
+
+/* 纯图标收藏维持深底白星；带文字的日间收藏在下方使用浅金底深字。 */
+.st-swipe-modal-overlay :is(.st-swipe-action-favorite, .st-swipe-annotation-favorite, .st-swipe-timeline-detail-favorite) {
+  --st-swipe-button-bg: #293647;
+  --st-swipe-button-hover: #364960;
+  --st-swipe-button-border: #52647b;
+  --st-swipe-button-hover-border: #849bb4;
+  --st-swipe-button-text: #fff;
+  --st-swipe-button-active: #3e3324;
+  --st-swipe-button-active-border: #bf883d;
+  --st-swipe-star-color: #fff;
+  flex: 0 0 auto;
+}
+
+.st-swipe-modal-overlay .st-swipe-action-favorite { min-width: 38px; padding: 5px 9px; }
+.st-swipe-star {
+  display: inline-block;
+  flex: 0 0 auto;
+  color: var(--st-swipe-star-color, #fff);
+  -webkit-text-fill-color: currentColor;
+  font-family: Arial, sans-serif;
+  font-size: 1.35rem;
+  font-style: normal;
+  line-height: 1;
+  text-shadow: none;
+}
+
+.st-swipe-modal-overlay :is(.st-swipe-action-favorite.active, .st-swipe-annotation-favorite[aria-pressed="true"], .st-swipe-timeline-detail-favorite[aria-pressed="true"]) {
+  --st-swipe-button-bg: #3e3324;
+  --st-swipe-button-hover: #50402a;
+  --st-swipe-button-border: #bf883d;
+  --st-swipe-button-hover-border: #efb55d;
+  --st-swipe-star-color: #ffca75;
+}
+
+.st-swipe-modal-overlay :is(.st-swipe-annotation-save, .st-swipe-edit-save) {
+  --st-swipe-button-bg: #285e7b;
+  --st-swipe-button-hover: #1d4b65;
+  --st-swipe-button-border: #285e7b;
+  --st-swipe-button-hover-border: #1d4b65;
+  --st-swipe-button-text: #fff;
+  font-weight: 600;
+}
+
+/* 日间编辑器与详情收藏：强调来自底色和边界，而不是浅色文字。 */
+.st-swipe-modal-overlay[data-swipe-theme="light"] :is(.st-swipe-annotation-favorite, .st-swipe-timeline-detail-favorite) {
+  --st-swipe-button-bg: #fff1d4;
+  --st-swipe-button-hover: #ffe4ad;
+  --st-swipe-button-border: #ad7b2b;
+  --st-swipe-button-hover-border: #855719;
+  --st-swipe-button-text: #66400e;
+  --st-swipe-button-active: #ffd58a;
+  --st-swipe-button-active-border: #9b6819;
+  --st-swipe-star-color: #7b510e;
+  font-weight: 700;
+}
+.st-swipe-modal-overlay[data-swipe-theme="light"] :is(.st-swipe-annotation-favorite, .st-swipe-timeline-detail-favorite)[aria-pressed="true"] {
+  --st-swipe-button-bg: #ffd58a;
+  --st-swipe-button-hover: #ffca6a;
+  --st-swipe-button-border: #a16b16;
+  --st-swipe-button-hover-border: #855719;
+  --st-swipe-button-text: #59350a;
+  --st-swipe-star-color: #925300;
+}
+#st-swipe-annotation-modal[data-swipe-theme="light"] .st-swipe-annotation-save {
+  --st-swipe-button-bg: #cbdff0;
+  --st-swipe-button-hover: #b9d2e8;
+  --st-swipe-button-border: #6687a5;
+  --st-swipe-button-hover-border: #426a8b;
+  --st-swipe-button-text: #173e60;
+  font-weight: 700;
+}
+#st-swipe-annotation-modal[data-swipe-theme="light"] :is(.st-swipe-annotation-favorite, .st-swipe-annotation-save),
+#st-swipe-tree-modal[data-swipe-theme="light"] .st-swipe-timeline-detail-favorite {
+  color: var(--st-swipe-button-text);
+  -webkit-text-fill-color: currentColor;
+  text-shadow: none;
+  filter: none;
+}
+#st-swipe-annotation-modal[data-swipe-theme="light"] :is(.st-swipe-annotation-favorite, .st-swipe-annotation-save):active:not(:disabled),
+#st-swipe-tree-modal[data-swipe-theme="light"] .st-swipe-timeline-detail-favorite:active:not(:disabled) {
+  box-shadow: inset 0 0 0 1px var(--st-swipe-button-hover-border);
+}
+#st-swipe-annotation-modal[data-swipe-theme="light"] .st-swipe-annotation-footer .menu_button:disabled,
+#st-swipe-tree-modal[data-swipe-theme="light"] .st-swipe-timeline-detail-annotation-actions .menu_button:disabled {
+  --st-swipe-button-bg: #e7ebee;
+  --st-swipe-button-text: #56616d;
+  --st-swipe-button-border: #98a2ad;
+  --st-swipe-star-color: #65717f;
+  opacity: 1;
+  border-style: dashed;
 }
 
 .st-swipe-modal-overlay :is(button, .menu_button):disabled,
 .st-swipe-modal-overlay .menu_button.disabled {
-  opacity: 0.45;
+  opacity: 0.5;
   cursor: not-allowed;
+  transform: none;
 }
 
 .st-swipe-modal-overlay :is(button, .menu_button, input, textarea, select, summary, [tabindex]):focus-visible {
@@ -641,6 +940,28 @@
 body.no-blur .st-swipe-modal-overlay {
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
+}
+
+/* 选择模式为编号保留独立可点击行；工具栏自己滚动，不能把列表压到只剩 padding。 */
+.st-swipe-selection-mode .st-swipe-modal-header {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.st-swipe-selection-mode .st-swipe-selection-toolbar {
+  min-height: 0;
+  overflow-y: auto;
+  align-content: flex-start;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.st-swipe-selection-mode .st-swipe-jump-list {
+  min-height: 56px;
+  max-height: min(120px, 12vh);
+  max-height: min(120px, 12dvh);
 }
 
 /* 批量选择：与当前 swipe (.active) 分开标记。 */
@@ -682,50 +1003,45 @@ body.no-blur .st-swipe-modal-overlay {
   overflow-wrap: anywhere;
 }
 
-/* 编号导航承担选择，当前标记与待删标记可同时显示。 */
-.st-swipe-jump-item {
-  position: relative;
-  appearance: none;
-  font-family: inherit;
-  line-height: 1;
-  flex-shrink: 0;
-  margin: 0;
-  padding: 2px;
-}
-
+/* 编号导航承担选择：当前点在底部、待删勾在左上，右侧留给收藏/注释。 */
 .st-swipe-jump-item.active::before {
-  content: '●';
+  content: '';
   position: absolute;
-  bottom: 1px;
-  left: 3px;
-  font-size: 7px;
-  color: var(--st-swipe-accent);
+  bottom: 3px;
+  left: calc(50% - 2px);
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--st-swipe-accent);
+  pointer-events: none;
 }
 
 .st-swipe-jump-item.selected {
   border-color: var(--st-swipe-text);
   background: var(--st-swipe-hover);
-  outline: 1px solid var(--st-swipe-text);
-  outline-offset: -3px;
+  box-shadow: inset 0 0 0 1px var(--st-swipe-text);
 }
 
 .st-swipe-jump-item.selected::after {
   content: '✓';
   position: absolute;
-  top: 0;
-  right: 1px;
-  font-size: 9px;
+  top: 2px;
+  left: 3px;
+  font-size: 10px;
+  line-height: 1;
   font-weight: bold;
+  color: var(--st-swipe-text);
+  pointer-events: none;
 }
 
 .st-swipe-jump-item.active.selected {
   border-color: var(--st-swipe-accent);
-  box-shadow: inset 0 -3px 0 var(--st-swipe-accent);
+  box-shadow: inset 0 0 0 1px var(--st-swipe-accent);
 }
 
 .st-swipe-selection-mode .st-swipe-jump-item {
-  width: 36px;
-  height: 36px;
+  min-width: 44px;
+  height: 44px;
 }
 
 .st-swipe-selection-hint,
@@ -919,7 +1235,7 @@ body.no-blur .st-swipe-modal-overlay {
 /* 移动端适配 */
 @media (max-width: 600px) {
   .st-swipe-modal-container {
-    width: 95%;
+    width: 100%;
     height: 95%;
     max-height: 95vh;
     max-height: 95dvh;
@@ -959,6 +1275,7 @@ body.no-blur .st-swipe-modal-overlay {
   }
 
   .st-swipe-card-badge {
+    flex: 0 1 auto;
     width: 100%;
     justify-content: space-between;
   }
@@ -971,16 +1288,25 @@ body.no-blur .st-swipe-modal-overlay {
   .st-swipe-card-actions .menu_button {
     flex: 1 1 auto;
     padding: 6px 4px;
-    font-size: 0.82em;
+    min-height: 44px;
+    font-size: 0.875em;
     text-align: center;
     justify-content: center;
     min-width: calc(50% - 4px);
   }
 
+  .st-swipe-card-actions .st-swipe-action-favorite {
+    flex: 0 0 44px;
+    min-width: 44px;
+    padding: 6px;
+  }
+
+  .st-swipe-card-badge .st-swipe-action-render-one { width: 44px; height: 44px; }
+
   .st-swipe-header-ops .menu_button {
     width: auto;
-    min-width: 36px;
-    min-height: 36px;
+    min-width: 44px;
+    min-height: 44px;
     font-size: 0.9em;
     padding: 6px;
   }
@@ -991,10 +1317,23 @@ body.no-blur .st-swipe-modal-overlay {
   }
 
   .st-swipe-jump-item {
-    width: 36px;
-    height: 36px;
-    font-size: 0.75em;
+    min-width: 44px;
+    height: 44px;
   }
+
+  #st-swipe-annotation-modal .st-swipe-annotation-editor {
+    width: 100%;
+    height: auto;
+    max-height: calc(100vh - 24px);
+    max-height: calc(100dvh - 24px);
+    border-radius: 10px;
+  }
+  #st-swipe-annotation-modal .st-swipe-annotation-header { padding: 14px 12px; gap: 8px; }
+  #st-swipe-annotation-modal .st-swipe-annotation-fields { padding: 14px 12px; gap: 14px; }
+  #st-swipe-annotation-modal :is(input, textarea) { font-size: max(16px, 1em); }
+  #st-swipe-annotation-modal .st-swipe-annotation-footer { gap: 10px; }
+  #st-swipe-annotation-modal .st-swipe-annotation-footer .menu_button { min-height: 44px; }
+  #st-swipe-annotation-modal .st-swipe-annotation-favorite { justify-content: center; }
 
   /* 针对编辑界面的按钮适配 */
   .st-swipe-edit-actions {
@@ -1039,6 +1378,13 @@ body.no-blur .st-swipe-modal-overlay {
     inset-inline-start: -12px;
     width: 12px;
   }
+}
+
+@media (pointer: coarse) {
+  .st-swipe-modal-overlay .menu_button,
+  .st-swipe-modal-overlay .st-swipe-selection-toolbar button { min-height: 44px; }
+  .st-swipe-modal-overlay .st-swipe-header-ops .menu_button { min-width: 44px; }
+  .st-swipe-jump-item { min-width: 44px; height: 44px; }
 }
 
 /* 系统减少动态效果首选项也适用于跳转和控件。 */
