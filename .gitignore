@@ -9,16 +9,29 @@ node_modules/
 .yarn/cache/
 .yarn/unplugged/
 .yarn/install-state.gz
+.yarn/build-state.yml
+.pnp.*
 
 # Generated build/package output; none is required by the current plugin entry.
-/dist/
-/build/
-/out/
+dist/
+build/
+out/
+/target/
+/release/
+/packages-output/
 *.tsbuildinfo
+*.tgz
+*.exe
+*.msi
+*.msix
+*.dmg
+*.AppImage
+*.apk
+*.aab
 
 # Local scratch files and temporary output.
-/tmp/
-/temp/
+tmp/
+temp/
 *.tmp
 *.temp
 *.swp
@@ -46,10 +59,10 @@ __pycache__/
 # Local-only tests, mock hosts, performance scripts and generated reports/screenshots.
 # Keep these on disk for development; do not include them in the published plugin.
 # Previously tracked tests must also be removed from the index with git rm --cached.
-/tests/
-/test/
-/__tests__/
-/artifacts/
+tests/
+test/
+__tests__/
+artifacts/
 *.test.js
 *.test.mjs
 *.test.cjs
@@ -59,12 +72,20 @@ __pycache__/
 
 # Test/tool caches and generated coverage reports.
 .cache/
+.parcel-cache/
+.vite/
+.turbo/
 coverage/
 .nyc_output/
 playwright-report/
 blob-report/
 test-results/
 .playwright/
+/playwright/.cache/
+/junit.xml
+/junit-*.xml
+/coverage-final.json
+/lcov.info
 .eslintcache
 .stylelintcache
 

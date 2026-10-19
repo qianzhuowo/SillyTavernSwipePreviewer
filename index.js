@@ -5,6 +5,8 @@ const initialization = (async function () {
   const { editAnnotation } = await import('./annotation-editor.mjs');
   const { installAnnotationTooltip } = await import('./annotation-tooltip.mjs');
   const hostCompat = await import('./host-compat.mjs');
+  const { installRegeneratePreservation } = await import('./regenerate-preservation.mjs');
+  const { iconMarkup } = await import('./icons.mjs');
   const nativeApi = await import('/script.js');
   const { eventSource, event_types: nativeEventTypes } = await import('/scripts/events.js');
   const { installNativeMessageButtons, installNativeTreeEntry, getNativePreviewMessage, prepareOverlayKeyboard, manageOverlayFocus, isTopSwipeOverlay } = await import('./native-integration.mjs');
@@ -153,6 +155,11 @@ const initialization = (async function () {
   let nativeButtons;
 
   function init() {
+    installRegeneratePreservation({
+      eventSource, eventTypes: nativeEventTypes, nativeApi,
+      getContext: () => window.SillyTavern?.getContext?.(),
+      onUnsupported: reason => window.toastr?.warning?.(reason, '分支保留受限'),
+    });
     eventSource.on(nativeEventTypes.APP_READY, () => {
       settings = settingsApi.loadSettings();
       applyButtonRegistration();
@@ -347,8 +354,8 @@ const initialization = (async function () {
               <button type="button" id="${modalId}-settings" class="menu_button fa-solid fa-gear" title="设置" aria-label="设置"></button>
             </div>
             <div class="st-swipe-header-ops">
-              <button type="button" id="${modalId}-delete-mode" class="menu_button" title="进入删除选择模式" aria-label="进入删除选择模式" aria-pressed="false" aria-controls="${modalId}-selection-toolbar ${modalId}-jump-list"><i class="fa-solid fa-trash-can" aria-hidden="true"></i><span class="st-swipe-op-label">删除</span></button>
-              <button type="button" id="${modalId}-tree" class="menu_button" title="当前聊天分支树" aria-label="当前聊天分支树"><i class="fa-solid fa-code-branch" aria-hidden="true"></i><span class="st-swipe-op-label">树状图</span></button>
+              <button type="button" id="${modalId}-delete-mode" class="menu_button" title="进入删除选择模式" aria-label="进入删除选择模式" aria-pressed="false" aria-controls="${modalId}-selection-toolbar ${modalId}-jump-list">${iconMarkup('delete')}<span class="st-swipe-op-label">删除</span></button>
+              <button type="button" id="${modalId}-tree" class="menu_button" title="当前聊天分支树" aria-label="当前聊天分支树">${iconMarkup('tree')}<span class="st-swipe-op-label">树状图</span></button>
               <button type="button" id="${modalId}-render" class="menu_button" title="渲染预览 (iframe)" aria-label="渲染预览 (iframe)"><i class="fa-solid fa-code" aria-hidden="true"></i><span class="st-swipe-op-label">渲染预览</span></button>
               <button type="button" id="${modalId}-toggle" class="menu_button active" title="收起列表" aria-label="收起列表" aria-expanded="true" aria-controls="${modalId}-jump-list"><i class="fa-solid fa-list-ol" aria-hidden="true"></i><span class="st-swipe-op-label">收起</span></button>
             </div>

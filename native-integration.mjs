@@ -1,3 +1,5 @@
+import { createIcon } from './icons.mjs';
+
 // Native SillyTavern message integration. No wrapper globals or per-message listeners.
 export const PREVIEW_BUTTON_SELECTOR = '.st-swipe-previewer-button';
 const installations = new WeakMap();
@@ -120,9 +122,8 @@ export function installNativeTreeEntry({ document, eventSource, eventTypes, onOp
     entry.tabIndex = 0;
     entry.setAttribute('role', 'button');
     entry.setAttribute('aria-label', '聊天分支树');
-    const icon = document.createElement('i');
-    icon.className = 'fa-lg fa-solid fa-code-branch';
-    icon.setAttribute('aria-hidden', 'true');
+    const icon = createIcon(document, 'tree');
+    icon.classList.add('st-swipe-icon-lg');
     const label = document.createElement('span');
     label.textContent = '聊天分支树';
     entry.append(icon, label);
