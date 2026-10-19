@@ -576,9 +576,11 @@
   #st-swipe-tree-modal .st-swipe-timeline-role-legend { order: 3; flex-basis: 100%; gap: 4px 10px; }
   #st-swipe-tree-modal .st-swipe-timeline-tools { max-height: calc(100% - 16px); overflow-y: auto; }
   #st-swipe-tree-modal .st-swipe-timeline-content { flex-direction: column; }
+  #st-swipe-tree-modal .st-swipe-timeline-canvas { min-height: 0; }
   #st-swipe-tree-modal .st-swipe-timeline-detail {
-    flex: 0 1 44%;
-    max-height: 44%;
+    /* 详情（含收起栏）占 2/3，画布占 1/3；短屏也由各自滚动容器承载内容。 */
+    flex: 0 0 66.666667%;
+    max-height: 66.666667%;
     max-width: 100%;
     width: 100%;
     border-inline-start: none;

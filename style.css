@@ -60,6 +60,11 @@
   text-shadow: none;
 }
 
+/* 遮罩透明度独立于宿主阴影色；只透出背景，不降低正文与控件的不透明度。 */
+.st-swipe-modal-overlay[data-swipe-theme="dark"] {
+  background: rgb(10 14 22 / 30%);
+}
+
 .st-swipe-modal-overlay[data-swipe-theme="light"] :is(.text_pole, input, textarea, select) {
   color: var(--st-swipe-text);
   background: #fffefa;
@@ -202,9 +207,10 @@
 
 #st-swipe-preview-modal .st-swipe-op-label { display: none; }
 
-/* 导航覆盖在卡片上层，不占用正文宽度；滚动时淡出，停止后恢复。 */
+/* 手机端导航覆盖正文；桌面端 shell 在完整弹窗右侧外置导航，不占用 body。 */
+#st-swipe-preview-modal { --st-swipe-nav-size: 36px; }
+#st-swipe-preview-modal .st-swipe-preview-shell { display: contents; }
 #st-swipe-preview-modal .st-swipe-preview-body {
-  --st-swipe-nav-size: 36px;
   position: relative;
   display: flex;
   flex: 1;
@@ -215,11 +221,12 @@
 #st-swipe-preview-modal .st-swipe-preview-nav {
   position: absolute;
   z-index: 1;
-  inset-block-start: 20px;
+  inset-block-start: 50%;
   inset-inline-end: 20px;
+  transform: translateY(-50%);
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 20px;
   pointer-events: none;
 }
 
@@ -234,18 +241,75 @@
   transition: opacity 140ms ease, background-color 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
 }
 
-#st-swipe-preview-modal .st-swipe-preview-nav.is-scrolling .menu_button {
-  opacity: 0.35;
+/* 外置按钮也使用明确底色，避免浅色宿主/页面背景吞没箭头。 */
+#st-swipe-preview-modal[data-swipe-theme="light"] .st-swipe-preview-nav .menu_button {
+  --st-swipe-button-bg: #e2eaf3;
+  --st-swipe-button-hover: #d2dfed;
+  --st-swipe-button-border: #526b84;
+  --st-swipe-button-hover-border: #244b70;
+  --st-swipe-button-text: #163a5c;
+  color: var(--st-swipe-button-text);
+  -webkit-text-fill-color: currentColor;
 }
 
-#st-swipe-preview-modal .st-swipe-preview-nav.is-scrolling .menu_button:focus-visible {
+/* 夜间箭头同样保留不透明底色；半透明遮罩下 hover 不应露出底层文字/图片。 */
+#st-swipe-preview-modal[data-swipe-theme="dark"] .st-swipe-preview-nav .menu_button {
+  --st-swipe-button-bg: #293647;
+  --st-swipe-button-hover: #364960;
+  --st-swipe-button-border: #849bb4;
+  --st-swipe-button-hover-border: #b7cbe0;
+  --st-swipe-button-text: #f4f7fb;
+  color: var(--st-swipe-button-text);
+  -webkit-text-fill-color: currentColor;
+}
+
+#st-swipe-preview-modal .st-swipe-preview-nav .menu_button::before {
+  color: inherit;
+  -webkit-text-fill-color: currentColor;
   opacity: 1;
+  filter: none;
+  text-shadow: none;
+}
+
+@media (max-width: 600px) {
+  #st-swipe-preview-modal .st-swipe-preview-nav.is-scrolling .menu_button { opacity: 0.35; }
+  #st-swipe-preview-modal .st-swipe-preview-nav.is-scrolling .menu_button:focus-visible { opacity: 1; }
 }
 
 /* 触摸设备不使用 hover，避免点按后悬停状态粘住而无法淡出。 */
-@media (hover: hover) and (pointer: fine) {
+@media (max-width: 600px) and (hover: hover) and (pointer: fine) {
   #st-swipe-preview-modal .st-swipe-preview-nav.is-scrolling:hover .menu_button {
     opacity: 1;
+  }
+}
+
+@media (min-width: 601px) {
+  #st-swipe-preview-modal .st-swipe-preview-shell {
+    position: relative;
+    display: block;
+    /* 两侧留出相同的外部空间：弹窗保持居中，导航不越过屏幕边缘。 */
+    width: min(85%, calc(100% - var(--st-swipe-nav-size) - var(--st-swipe-nav-size) - 24px));
+    max-width: 900px;
+    height: 85%;
+    max-height: 85vh;
+    max-height: 85dvh;
+    min-width: 0;
+    min-height: 0;
+    margin: auto;
+  }
+  #st-swipe-preview-modal .st-swipe-preview-shell > .st-swipe-modal-container {
+    width: 100%;
+    max-width: none;
+    height: 100%;
+    max-height: none;
+    margin: 0;
+  }
+  #st-swipe-preview-modal .st-swipe-preview-nav {
+    inset-inline-start: calc(100% + 12px);
+    inset-inline-end: auto;
+  }
+  #st-swipe-preview-modal .st-swipe-preview-nav .menu_button {
+    transition: background-color 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
   }
 }
 
@@ -387,8 +451,9 @@
 .st-swipe-card-badge {
   display: flex;
   align-items: center;
-  gap: 8px;
-  flex: 1 1 180px;
+  gap: 6px;
+  flex: 0 1 auto;
+  order: 1;
   min-width: 0;
   max-width: 100%;
   margin: 0;
@@ -398,10 +463,21 @@
   line-height: 1.6;
 }
 
-/* label 内是普通 inline 文本：名称紧随编号，剩余宽度不足才自然折行。 */
-.st-swipe-card-label { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+/* 编号行只放收藏、编号与渲染；名称独占一行，无名称时不生成节点。 */
+.st-swipe-card-label { flex: 0 1 auto; min-width: 0; }
 .st-swipe-card-number { white-space: nowrap; font-variant-numeric: tabular-nums; }
-.st-swipe-card-name { display: inline; margin-inline-start: 0.55em; color: var(--st-swipe-text); }
+.st-swipe-card-name {
+  display: block;
+  order: 3;
+  flex: 0 0 100%;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  color: var(--st-swipe-text);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
 .st-swipe-card-name:empty { display: none; }
 
 .st-swipe-card.active .st-swipe-card-badge {
@@ -417,7 +493,7 @@
   color: var(--st-swipe-text);
 }
 
-/* 卡片头部（badge + 操作按钮同一行） */
+/* 桌面首行：左侧编号工具，右侧操作；命名另起一行。窄窗口允许操作组折行。 */
 .st-swipe-card-header {
   display: flex;
   align-items: center;
@@ -428,25 +504,40 @@
   min-width: 0;
 }
 
-.st-swipe-card-badge .st-swipe-action-render-one {
-  flex: 0 0 auto;
-  width: 32px;
-  height: 32px;
+#st-swipe-preview-modal .st-swipe-card-badge :is(.st-swipe-action-favorite, .st-swipe-action-render-one) {
+  flex: 0 0 28px;
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  min-height: 28px;
   padding: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  font-size: 12px;
 }
+
+#st-swipe-preview-modal .st-swipe-card-badge .st-swipe-action-favorite { border-radius: 50%; }
+#st-swipe-preview-modal .st-swipe-card-badge .st-swipe-star { font-size: 18px; }
 
 /* 卡片操作按钮 */
 .st-swipe-card-actions {
   display: flex;
+  align-items: center;
   gap: 6px;
   flex-wrap: wrap;
-  margin-bottom: 0;
+  order: 2;
+  margin: 0 0 0 auto;
   min-width: 0;
   max-width: 100%;
 }
+
+.st-swipe-card-primary-actions,
+.st-swipe-card-secondary-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+#st-swipe-preview-modal .st-swipe-card-actions .menu_button { white-space: nowrap; }
 
 .st-swipe-edit-textarea {
   width: 100%;
@@ -929,7 +1020,7 @@
   border-style: dashed;
 }
 
-/* 纯图标收藏维持深底白星；带文字的日间收藏在下方使用浅金底深字。 */
+/* 夜间收藏深底白星；日间未收藏与已收藏的独立配色见下方。 */
 .st-swipe-modal-overlay :is(.st-swipe-action-favorite, .st-swipe-annotation-favorite, .st-swipe-timeline-detail-favorite) {
   --st-swipe-button-bg: #293647;
   --st-swipe-button-hover: #364960;
@@ -943,6 +1034,29 @@
 }
 
 .st-swipe-modal-overlay .st-swipe-action-favorite { min-width: 38px; padding: 5px 9px; }
+.st-swipe-modal-overlay :is(.st-swipe-action-favorite, .st-swipe-annotation-favorite, .st-swipe-timeline-detail-favorite) {
+  color: var(--st-swipe-button-text);
+  -webkit-text-fill-color: currentColor;
+}
+
+.st-swipe-modal-overlay :is(.st-swipe-action-favorite, .st-swipe-annotation-favorite, .st-swipe-timeline-detail-favorite):not(:disabled):not(.disabled) {
+  opacity: 1;
+  filter: none;
+  text-shadow: none;
+}
+
+/* 宿主可能单独给 span/图标设置浅色填充、透明度或滤镜，不能只设置父按钮 color。 */
+.st-swipe-modal-overlay :is(.st-swipe-action-favorite, .st-swipe-annotation-favorite, .st-swipe-timeline-detail-favorite) > span {
+  color: inherit;
+  -webkit-text-fill-color: currentColor;
+  opacity: 1;
+  filter: none;
+  text-shadow: none;
+}
+.st-swipe-modal-overlay :is(.st-swipe-action-favorite, .st-swipe-annotation-favorite, .st-swipe-timeline-detail-favorite) > .st-swipe-star {
+  color: var(--st-swipe-star-color);
+}
+
 .st-swipe-star {
   display: inline-block;
   flex: 0 0 auto;
@@ -990,8 +1104,18 @@
   --st-swipe-button-border: #a16b16;
   --st-swipe-button-hover-border: #855719;
   --st-swipe-button-text: #59350a;
-  --st-swipe-star-color: #925300;
+  --st-swipe-star-color: #804600;
 }
+/* 日间未收藏统一浅蓝灰底 + 深色空心星；金色仅用于已收藏状态。 */
+.st-swipe-modal-overlay[data-swipe-theme="light"] :is(.st-swipe-action-favorite, .st-swipe-annotation-favorite, .st-swipe-timeline-detail-favorite):not(.active):not([aria-pressed="true"]) {
+  --st-swipe-button-bg: #e3e9f0;
+  --st-swipe-button-hover: #d3deeb;
+  --st-swipe-button-border: #687b91;
+  --st-swipe-button-hover-border: #344e6c;
+  --st-swipe-button-text: #233a53;
+  --st-swipe-star-color: #233a53;
+}
+
 #st-swipe-annotation-modal[data-swipe-theme="light"] .st-swipe-annotation-save {
   --st-swipe-button-bg: #cbdff0;
   --st-swipe-button-hover: #b9d2e8;
@@ -1011,12 +1135,13 @@
 #st-swipe-tree-modal[data-swipe-theme="light"] .st-swipe-timeline-detail-favorite:active:not(:disabled) {
   box-shadow: inset 0 0 0 1px var(--st-swipe-button-hover-border);
 }
+#st-swipe-preview-modal[data-swipe-theme="light"] .st-swipe-action-favorite:disabled,
 #st-swipe-annotation-modal[data-swipe-theme="light"] .st-swipe-annotation-footer .menu_button:disabled,
 #st-swipe-tree-modal[data-swipe-theme="light"] .st-swipe-timeline-detail-annotation-actions .menu_button:disabled {
   --st-swipe-button-bg: #e7ebee;
   --st-swipe-button-text: #56616d;
   --st-swipe-button-border: #98a2ad;
-  --st-swipe-star-color: #65717f;
+  --st-swipe-star-color: #56616d;
   opacity: 1;
   border-style: dashed;
 }
@@ -1375,45 +1500,60 @@ body.no-blur .st-swipe-modal-overlay {
 
   .st-swipe-card-header {
     flex-direction: column;
-    align-items: flex-start;
-    gap: 10px;
+    align-items: stretch;
+    gap: 8px;
   }
 
   .st-swipe-card-badge {
     flex: 0 1 auto;
     width: 100%;
-    justify-content: space-between;
+    justify-content: flex-start;
   }
 
+  .st-swipe-card-name { flex: 0 1 auto; order: 2; }
+
   .st-swipe-card-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
     width: 100%;
-    gap: 4px;
+    gap: 8px;
+    margin: 0;
+    order: 3;
+  }
+
+  .st-swipe-card-primary-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .st-swipe-card-secondary-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) repeat(3, 44px);
   }
 
   .st-swipe-card-actions .menu_button {
-    flex: 1 1 auto;
+    width: 100%;
     padding: 6px 4px;
     min-height: 44px;
     font-size: 0.875em;
     text-align: center;
     justify-content: center;
-    min-width: calc(50% - 4px);
-  }
-
-  .st-swipe-card-actions .st-swipe-action-favorite {
-    flex: 0 0 44px;
-    min-width: 44px;
-    padding: 6px;
+    min-width: 0;
   }
 
   #st-swipe-preview-modal .st-swipe-card-actions .st-swipe-icon-action {
-    flex-basis: 44px;
     width: 44px;
     min-width: 44px;
     height: 44px;
   }
 
-  .st-swipe-card-badge .st-swipe-action-render-one { width: 44px; height: 44px; }
+  #st-swipe-preview-modal .st-swipe-card-badge :is(.st-swipe-action-favorite, .st-swipe-action-render-one) {
+    flex-basis: 30px;
+    width: 30px;
+    min-width: 30px;
+    height: 30px;
+    min-height: 30px;
+  }
 
   .st-swipe-header-ops .menu_button {
     width: auto;
@@ -1478,8 +1618,7 @@ body.no-blur .st-swipe-modal-overlay {
 
   #st-swipe-preview-modal .st-swipe-op-label { display: inline; }
 
-  #st-swipe-preview-modal .st-swipe-preview-body { --st-swipe-nav-size: 44px; }
-  #st-swipe-preview-modal .st-swipe-preview-nav { inset-block-start: 10px; }
+  #st-swipe-preview-modal { --st-swipe-nav-size: 44px; }
 
   .st-swipe-jump-list {
     padding: 0 12px 10px 12px;
@@ -1555,7 +1694,7 @@ body.no-blur .st-swipe-modal-overlay {
   .st-swipe-modal-overlay .st-swipe-selection-toolbar button { min-height: 44px; }
   .st-swipe-modal-overlay .st-swipe-header-ops .menu_button { min-width: 44px; }
   .st-swipe-jump-item { min-width: 44px; height: 44px; }
-  #st-swipe-preview-modal .st-swipe-preview-body { --st-swipe-nav-size: 44px; }
+  #st-swipe-preview-modal { --st-swipe-nav-size: 44px; }
 }
 
 /* 系统减少动态效果首选项也适用于跳转和控件。 */

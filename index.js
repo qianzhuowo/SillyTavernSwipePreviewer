@@ -338,6 +338,7 @@ const initialization = (async function () {
 
     // 先渲染骨架，内容异步填充（因为可能需要跑 regex）
     modalOverlay.innerHTML = `
+      <div class="st-swipe-preview-shell">
       <div class="st-swipe-modal-container">
         <div class="st-swipe-modal-header">
           <div class="st-swipe-modal-header-top">
@@ -376,6 +377,7 @@ const initialization = (async function () {
             <div class="st-swipe-loading">正在加载分支内容...</div>
           </div>
         </div>
+      </div>
       </div>
     `;
 
@@ -456,10 +458,28 @@ const initialization = (async function () {
 
     const contentEl = modalOverlay.querySelector(`#${modalId}-content`);
     const previewBody = modalOverlay.querySelector('.st-swipe-preview-body');
+    const previewShell = modalOverlay.querySelector('.st-swipe-preview-shell');
     const previewNav = modalOverlay.querySelector('.st-swipe-preview-nav');
+    const mobileNavigation = window.matchMedia('(max-width: 600px)');
     let navIdleTimer = null;
-    const fadeNavigation = () => {
+    const syncNavigationLayout = () => {
       if (closed) return;
+      clearTimeout(navIdleTimer);
+      navIdleTimer = null;
+      previewNav.classList.remove('is-scrolling');
+      const parent = mobileNavigation.matches ? previewBody : previewShell;
+      if (previewNav.parentElement !== parent) {
+        const focused = previewNav.contains(document.activeElement) ? document.activeElement : null;
+        if (mobileNavigation.matches) parent.prepend(previewNav);
+        else parent.append(previewNav);
+        focused?.focus({ preventScroll: true });
+      }
+    };
+    syncNavigationLayout();
+    if (mobileNavigation.addEventListener) mobileNavigation.addEventListener('change', syncNavigationLayout);
+    else mobileNavigation.addListener(syncNavigationLayout);
+    const fadeNavigation = () => {
+      if (closed || !mobileNavigation.matches) return;
       previewNav.classList.add('is-scrolling');
       clearTimeout(navIdleTimer);
       navIdleTimer = setTimeout(() => {
@@ -467,7 +487,7 @@ const initialization = (async function () {
         previewNav.classList.remove('is-scrolling');
       }, 650);
     };
-    // Passive listeners preserve native wheel/touch scrolling, including inertial scrolls.
+    // Only mobile overlays fade; passive listeners preserve native/inertial scrolling.
     contentEl.addEventListener('scroll', fadeNavigation, { passive: true });
     previewBody.addEventListener('wheel', fadeNavigation, { passive: true });
     previewBody.addEventListener('touchmove', fadeNavigation, { passive: true });
@@ -565,19 +585,24 @@ const initialization = (async function () {
           <div class="st-swipe-card ${idx === currentSwipeId ? 'active' : ''}" id="${modalId}-card-${idx}" data-idx="${idx}">
             <div class="st-swipe-card-header">
               <div class="st-swipe-card-badge">
-                <span class="st-swipe-card-label"><span class="st-swipe-card-number">分支 #${idx + 1} ${idx === currentSwipeId ? '(当前选中)' : ''}</span>${a.name ? ` <span class="st-swipe-annotation-name st-swipe-card-name">${escapeAttr(a.name)}</span>` : ''}</span>
-                <button class="menu_button st-swipe-action-render-one" data-idx="${idx}" title="单独开启/关闭渲染预览">
-                  <i class="fa-solid fa-code"></i>
+                <button type="button" class="menu_button st-swipe-action-favorite ${a.favorite ? 'active' : ''}" data-idx="${idx}" aria-pressed="${a.favorite}" aria-label="${a.favorite ? '取消收藏' : '收藏此分支'}" title="${a.favorite ? '取消收藏' : '收藏此分支'}"><span class="st-swipe-star" aria-hidden="true">${a.favorite ? '★' : '☆'}</span></button>
+                <span class="st-swipe-card-label"><span class="st-swipe-card-number">分支 #${idx + 1} ${idx === currentSwipeId ? '(当前选中)' : ''}</span></span>
+                <button type="button" class="menu_button st-swipe-action-render-one" data-idx="${idx}" title="单独开启/关闭渲染预览" aria-label="单独开启/关闭渲染预览">
+                  <i class="fa-solid fa-code" aria-hidden="true"></i>
                 </button>
               </div>
+              ${a.name ? `<div class="st-swipe-annotation-name st-swipe-card-name">${escapeAttr(a.name)}</div>` : ''}
               <div class="st-swipe-card-actions">
-                <button class="menu_button st-swipe-action-switch" data-idx="${idx}">切换楼层内容</button>
-                <button class="menu_button st-swipe-action-branch" data-idx="${idx}">创建新存档</button>
-                <button class="menu_button st-swipe-action-annotate" data-idx="${idx}">命名/备注</button>
-                <button type="button" class="menu_button st-swipe-action-favorite ${a.favorite ? 'active' : ''}" data-idx="${idx}" aria-pressed="${a.favorite}" aria-label="${a.favorite ? '取消收藏' : '收藏此分支'}" title="${a.favorite ? '取消收藏' : '收藏此分支'}"><span class="st-swipe-star" aria-hidden="true">${a.favorite ? '★' : '☆'}</span></button>
-                <button type="button" class="menu_button st-swipe-action-edit st-swipe-icon-action" data-idx="${idx}" title="编辑分支" aria-label="编辑分支"><i class="fa-solid fa-pencil" aria-hidden="true"></i></button>
-                <button type="button" class="menu_button st-swipe-action-move-up st-swipe-icon-action" data-idx="${idx}" title="上移" aria-label="上移" ${idx === 0 ? 'disabled' : ''}><i class="fa-solid fa-arrow-up" aria-hidden="true"></i></button>
-                <button type="button" class="menu_button st-swipe-action-move-down st-swipe-icon-action" data-idx="${idx}" title="下移" aria-label="下移" ${idx === swipes.length - 1 ? 'disabled' : ''}><i class="fa-solid fa-arrow-down" aria-hidden="true"></i></button>
+                <div class="st-swipe-card-primary-actions">
+                  <button type="button" class="menu_button st-swipe-action-switch" data-idx="${idx}">切换楼层内容</button>
+                  <button type="button" class="menu_button st-swipe-action-branch" data-idx="${idx}">创建新存档</button>
+                </div>
+                <div class="st-swipe-card-secondary-actions">
+                  <button type="button" class="menu_button st-swipe-action-annotate" data-idx="${idx}">命名/备注</button>
+                  <button type="button" class="menu_button st-swipe-action-edit st-swipe-icon-action" data-idx="${idx}" title="编辑分支" aria-label="编辑分支"><i class="fa-solid fa-pencil" aria-hidden="true"></i></button>
+                  <button type="button" class="menu_button st-swipe-action-move-up st-swipe-icon-action" data-idx="${idx}" title="上移" aria-label="上移" ${idx === 0 ? 'disabled' : ''}><i class="fa-solid fa-arrow-up" aria-hidden="true"></i></button>
+                  <button type="button" class="menu_button st-swipe-action-move-down st-swipe-icon-action" data-idx="${idx}" title="下移" aria-label="下移" ${idx === swipes.length - 1 ? 'disabled' : ''}><i class="fa-solid fa-arrow-down" aria-hidden="true"></i></button>
+                </div>
               </div>
             </div>
 
@@ -1292,7 +1317,7 @@ const initialization = (async function () {
       bindDynamicEvents();
       renderAllCards();
       if (!Array.isArray(originMessage.swipes) || !originMessage.swipes.length || originMessage.is_user || originMessage.extra?.isSmallSys) {
-        contentEl.querySelectorAll('.st-swipe-card-actions button').forEach(button => { button.disabled = true; });
+        contentEl.querySelectorAll('.st-swipe-card-actions button, .st-swipe-action-favorite').forEach(button => { button.disabled = true; });
       }
       updateSelection();
       if (keepScroll) scrollToIdx(focusIdx, 'auto');
@@ -1480,7 +1505,7 @@ const initialization = (async function () {
 
     modalOverlay.addEventListener('click', event => {
       const target = event.target.closest('[data-idx], [data-selection]');
-      if (!target || busy) return;
+      if (!target || busy || target.disabled) return;
       const action = target.dataset.selection;
       if (action) {
         if (!selectionMode || target.disabled) return;
@@ -1657,6 +1682,8 @@ const initialization = (async function () {
       if (closed) return;
       closed = true;
       clearTimeout(navIdleTimer);
+      if (mobileNavigation.removeEventListener) mobileNavigation.removeEventListener('change', syncNavigationLayout);
+      else mobileNavigation.removeListener(syncNavigationLayout);
       contentEl.removeEventListener('scroll', fadeNavigation);
       previewBody.removeEventListener('wheel', fadeNavigation);
       previewBody.removeEventListener('touchmove', fadeNavigation);

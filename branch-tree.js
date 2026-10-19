@@ -151,10 +151,11 @@ export function showBranchTree({ onPreview, onClose, onAnnotationChange, focusMe
     toolbar.append(search, previousMatch, nextMatch, matchCount);
     const controls = element('div', 'st-swipe-timeline-controls');
     controls.id = `${MODAL_ID}-controls`;
-    controls.hidden = !preferences.toolsExpanded;
+    // 工具栏展开仅属于本次打开，不恢复旧的 toolsExpanded 偏好。
+    controls.hidden = true;
     const toolsToggle = iconButton('st-swipe-timeline-tools-toggle', 'fa-sliders', '展开/收起画布工具栏');
     toolsToggle.setAttribute('aria-controls', controls.id);
-    toolsToggle.setAttribute('aria-expanded', String(preferences.toolsExpanded));
+    toolsToggle.setAttribute('aria-expanded', 'false');
     const toggleCandidates = button('st-swipe-timeline-toggle-candidates', includeCandidates ? '全部' : '主干',
         includeCandidates ? '当前显示全部；点击仅显示主干' : '当前仅显示主干；点击显示全部');
     toggleCandidates.setAttribute('aria-pressed', String(includeCandidates));
@@ -575,8 +576,7 @@ export function showBranchTree({ onPreview, onClose, onAnnotationChange, focusMe
         if (preserveCenter) viewport.scrollLeft = Math.max(0, centerX * scale + stageOffsetX - lastViewportWidth / 2);
     }
     function persistPreferences() {
-        saveTimelinePreferences({ scale: pendingZoom ?? scale, includeCandidates, onlyChar, onlyBranches, favoritesOnly, annotatedOnly,
-            toolsExpanded: !controls.hidden });
+        saveTimelinePreferences({ scale: pendingZoom ?? scale, includeCandidates, onlyChar, onlyBranches, favoritesOnly, annotatedOnly });
     }
     function setZoom(next) {
         if (!layout || !valid(graphToken)) return;
@@ -900,7 +900,8 @@ export function showBranchTree({ onPreview, onClose, onAnnotationChange, focusMe
         if (messageTimer) return;
         messageTimer = setTimeout(() => {
             messageTimer = 0;
-            if (!valid(graphToken)) return;
+            // 标记事务可能已同步处理完所有脏楼层；空刷新不应覆盖刚显示的保存失败提示。
+            if (!valid(graphToken) || !dirtyFloors.size) return;
             let reflow = favoritesOnly || annotatedOnly;
             for (const mesId of dirtyFloors) {
                 const result = graph.update(mesId);
@@ -962,7 +963,6 @@ export function showBranchTree({ onPreview, onClose, onAnnotationChange, focusMe
     toolsToggle.addEventListener('click', () => {
         controls.hidden = !controls.hidden;
         toolsToggle.setAttribute('aria-expanded', String(!controls.hidden));
-        persistPreferences();
         scheduleFrame(true);
     });
     searchToggle.addEventListener('click', () => {
