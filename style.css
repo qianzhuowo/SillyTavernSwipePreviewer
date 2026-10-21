@@ -285,8 +285,33 @@
   --st-swipe-button-border: #526b84;
   --st-swipe-button-hover-border: #244b70;
   --st-swipe-button-text: #163a5c;
-  color: var(--st-swipe-button-text);
-  -webkit-text-fill-color: currentColor;
+  /* 仅隔离日间导航，防止宿主主题的强制按钮配色/滤镜冲淡箭头。 */
+  color: var(--st-swipe-button-text) !important;
+  background: var(--st-swipe-button-bg) !important;
+  border: 1px solid var(--st-swipe-button-border) !important;
+  -webkit-text-fill-color: currentColor !important;
+  text-shadow: none !important;
+  filter: none !important;
+  box-shadow: 0 2px 6px rgb(31 44 60 / 24%);
+}
+
+#st-swipe-preview-modal[data-swipe-theme="light"] .st-swipe-preview-nav .menu_button:not(.disabled):not([disabled]):is(:hover, :active) {
+  background: var(--st-swipe-button-hover) !important;
+  border-color: var(--st-swipe-button-hover-border) !important;
+}
+
+#st-swipe-preview-modal[data-swipe-theme="light"] .st-swipe-preview-nav .menu_button:focus-visible {
+  outline: 2px solid var(--st-swipe-focus);
+  outline-offset: 3px;
+}
+
+#st-swipe-preview-modal[data-swipe-theme="light"] .st-swipe-preview-nav .menu_button::before,
+#st-swipe-preview-modal[data-swipe-theme="light"] .st-swipe-preview-nav .menu_button .st-swipe-icon {
+  color: var(--st-swipe-button-text) !important;
+  -webkit-text-fill-color: currentColor !important;
+  text-shadow: none !important;
+  filter: none !important;
+  opacity: 1;
 }
 
 /* 夜间箭头同样保留不透明底色；半透明遮罩下 hover 不应露出底层文字/图片。 */
