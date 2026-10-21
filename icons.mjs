@@ -1,5 +1,7 @@
 // Local decorative icons: no font, network request, or host icon library required.
 const paths = {
+    top: 'M4 4h16M12 20V8M6 14l6-6 6 6',
+    bottom: 'M4 20h16M12 4v12M6 10l6 6 6-6',
     delete: 'M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7',
     tree: 'M6 8v8M6 12h7a5 5 0 0 0 5-5M6 2a3 3 0 1 0 0 6 3 3 0 0 0 0-6ZM6 16a3 3 0 1 0 0 6 3 3 0 0 0 0-6ZM18 1a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z',
 };

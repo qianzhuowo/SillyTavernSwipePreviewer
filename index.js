@@ -377,9 +377,11 @@ const initialization = (async function () {
         </div>
 
         <div class="st-swipe-preview-body">
-          <div class="st-swipe-preview-nav" role="group" aria-label="浏览相邻分支">
+          <div class="st-swipe-preview-nav" role="group" aria-label="浏览分支及当前分支头尾">
             <button type="button" id="${modalId}-prev" class="menu_button fa-solid fa-chevron-up" title="上一个" aria-label="上一个" aria-controls="${modalId}-content"></button>
             <button type="button" id="${modalId}-next" class="menu_button fa-solid fa-chevron-down" title="下一个" aria-label="下一个" aria-controls="${modalId}-content"></button>
+            <button type="button" id="${modalId}-current-top" class="menu_button" title="当前顶部" aria-label="当前顶部" aria-controls="${modalId}-content">${iconMarkup('top')}</button>
+            <button type="button" id="${modalId}-current-bottom" class="menu_button" title="当前底部" aria-label="当前底部" aria-controls="${modalId}-content">${iconMarkup('bottom')}</button>
           </div>
           <div class="st-swipe-modal-content" id="${modalId}-content">
             <div class="st-swipe-loading">正在加载分支内容...</div>
@@ -1211,6 +1213,29 @@ const initialization = (async function () {
       card.scrollIntoView({ behavior, block: 'start' });
     };
 
+    const scrollToCurrentEdge = (edge) => {
+      const cards = [...contentEl.querySelectorAll('.st-swipe-card')];
+      if (!cards.length) return;
+      const viewport = contentEl.getBoundingClientRect();
+      const top = viewport.top + contentEl.clientTop;
+      const bottom = top + contentEl.clientHeight;
+      const visibleHeight = card => {
+        const rect = card.getBoundingClientRect();
+        return Math.max(0, Math.min(rect.bottom, bottom) - Math.max(rect.top, top));
+      };
+      // Keep an explicitly selected short card when fully visible. Otherwise use
+      // the most visible card, so manual scrolling cannot target an offscreen swipe.
+      let card = cards.find(item => Number(item.dataset.idx) === currentViewIdx);
+      const rect = card?.getBoundingClientRect();
+      if (!rect || rect.top < top || rect.bottom > bottom) {
+        card = cards.reduce((best, item) => visibleHeight(item) > visibleHeight(best) ? item : best, card || cards[0]);
+      }
+      currentViewIdx = Number(card.dataset.idx);
+      const target = card.getBoundingClientRect();
+      const delta = edge === 'bottom' ? target.bottom - bottom + 8 : target.top - top - 8;
+      contentEl.scrollTo({ top: Math.max(0, contentEl.scrollTop + delta), behavior: 'auto' });
+    };
+
     const swapRenderPreviewState = (a, b) => {
       const hasA = renderPreviewByIdx.has(a);
       const hasB = renderPreviewByIdx.has(b);
@@ -1660,6 +1685,8 @@ const initialization = (async function () {
 
     modalOverlay.querySelector(`#${modalId}-prev`)?.addEventListener('click', () => scrollToIdx(Math.max(0, currentViewIdx - 1)));
     modalOverlay.querySelector(`#${modalId}-next`)?.addEventListener('click', () => scrollToIdx(Math.min(Math.max(swipes.length - 1, 0), currentViewIdx + 1)));
+    modalOverlay.querySelector(`#${modalId}-current-top`)?.addEventListener('click', () => scrollToCurrentEdge('top'));
+    modalOverlay.querySelector(`#${modalId}-current-bottom`)?.addEventListener('click', () => scrollToCurrentEdge('bottom'));
     modalOverlay.querySelector(`#${modalId}-toggle`)?.addEventListener('click', () => {
       if (selectionMode) return;
       jumpListEl.classList.toggle('hidden');
