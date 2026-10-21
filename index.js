@@ -1,5 +1,6 @@
 const initialization = (async function () {
   const swipeData = await import('./swipe-data.mjs');
+  const { installModalResize } = await import('./modal-resize.mjs');
   const settingsApi = await import('./settings.mjs');
   const annotations = await import('./annotations.mjs');
   const { editAnnotation } = await import('./annotation-editor.mjs');
@@ -394,6 +395,11 @@ const initialization = (async function () {
     settingsApi.installTheme(modalOverlay);
     prepareOverlayKeyboard(modalOverlay);
     document.body.appendChild(modalOverlay);
+    const disposeModalResize = installModalResize(modalOverlay.querySelector('.st-swipe-modal-container'), {
+      kind: 'preview',
+      target: modalOverlay.querySelector('.st-swipe-preview-shell'),
+      navigation: modalOverlay.querySelector('.st-swipe-preview-nav'),
+    });
 
     // 状态
     let currentViewIdx = Number.isInteger(focusIdx) ? focusIdx : currentSwipeId;
@@ -1695,6 +1701,7 @@ const initialization = (async function () {
       previewBody.removeEventListener('wheel', fadeNavigation);
       previewBody.removeEventListener('touchmove', fadeNavigation);
       previewNav.classList.remove('is-scrolling');
+      disposeModalResize();
       annotationTooltip.dispose();
       cancelEdit?.();
       releaseFocus();

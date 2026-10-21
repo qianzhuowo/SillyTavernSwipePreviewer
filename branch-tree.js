@@ -1,3 +1,4 @@
+import { installModalResize } from './modal-resize.mjs';
 import { locateBoundedMessage } from './host-compat.mjs';
 import { getAnnotation } from './annotations.mjs';
 import { editAnnotation } from './annotation-editor.mjs';
@@ -228,6 +229,7 @@ export function showBranchTree({ onPreview, onClose, onAnnotationChange, focusMe
     installTheme(overlay);
     prepareOverlayKeyboard(overlay);
     document.body.append(overlay);
+    const disposeModalResize = installModalResize(container, { kind: 'timeline' });
 
     let closed = false;
     let chatKey = identity(initialContext);
@@ -356,6 +358,7 @@ export function showBranchTree({ onPreview, onClose, onAnnotationChange, focusMe
         releaseFocus(reason === 'dismiss');
         for (const [source, event, handler] of subscriptions) source.removeListener(event, handler);
         stopDrag();
+        disposeModalResize();
         overlay.remove();
         rows.clear();
         nodeElements.clear(); edgeElements.clear(); gapElements.clear(); summaryElements.clear();

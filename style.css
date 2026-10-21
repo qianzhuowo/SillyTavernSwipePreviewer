@@ -131,6 +131,28 @@
   margin: auto;
 }
 
+/* Desktop-only corner grip; preview dimensions belong to its navigation shell. */
+.st-swipe-resizable { position: relative; }
+.st-swipe-resize-handle { display: none; }
+@media (min-width: 601px) and (hover: hover) and (pointer: fine) {
+  .st-swipe-resize-handle:not([hidden]) {
+    display: block;
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    width: 20px;
+    height: 20px;
+    z-index: 30;
+    cursor: nwse-resize;
+    touch-action: none;
+    user-select: none;
+    background: repeating-linear-gradient(135deg, transparent 0 3px, var(--st-swipe-muted) 3px 5px);
+    clip-path: polygon(100% 0, 100% 100%, 0 100%);
+    opacity: 0.7;
+  }
+  .st-swipe-resize-handle:hover { opacity: 1; }
+}
+
 /* 头部 */
 .st-swipe-modal-header {
   padding: 0;
