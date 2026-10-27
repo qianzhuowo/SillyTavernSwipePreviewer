@@ -2,7 +2,7 @@
 export const SETTINGS_KEY = 'swipe_previewer';
 export const DEFAULT_SETTINGS = Object.freeze({
     moveButtonsToExtraMenu: false, applyTavernRegex: false,
-    renderMarkdownInTextView: false, theme: 'dark',
+    renderMarkdownInTextView: false, theme: 'dark', viewingMode: 'single',
 });
 const object = value => value && typeof value === 'object' && !Array.isArray(value) ? value : {};
 export function normalizeSettings(value) {
@@ -11,6 +11,7 @@ export function normalizeSettings(value) {
         if (typeof source[key] === 'boolean') result[key] = source[key];
     }
     if (source.theme === 'light') result.theme = 'light';
+    if (source.viewingMode === 'all') result.viewingMode = 'all';
     return result;
 }
 function legacy(key) {

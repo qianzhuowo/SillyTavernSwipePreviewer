@@ -203,7 +203,15 @@
   display: flex;
   align-items: center;
   min-width: 0;
-  gap: 6px;
+    gap: 6px;
+}
+
+#st-swipe-preview-modal .st-swipe-title-controls button.st-swipe-viewing-mode-toggle {
+  width: auto;
+  min-width: max-content;
+  border-radius: 7px;
+  white-space: nowrap;
+  padding-inline: 8px;
 }
 
 #st-swipe-preview-modal .st-swipe-title {
@@ -474,6 +482,20 @@
   border-color: var(--st-swipe-accent);
   font-weight: bold;
 }
+
+/* Browsing is independent of the host's active swipe and delete selection. */
+#st-swipe-preview-modal .st-swipe-jump-item.is-viewing {
+  background: #263b51;
+  color: #fff;
+  -webkit-text-fill-color: currentColor;
+  box-shadow: inset 0 0 0 2px #91b5da;
+}
+#st-swipe-preview-modal[data-swipe-theme="light"] .st-swipe-jump-item.is-viewing {
+  background: #b8cde1;
+  color: #172f48;
+  box-shadow: inset 0 0 0 2px #476d91;
+}
+#st-swipe-preview-modal .st-swipe-card[hidden] { display: none !important; }
 
 /* 内容区 */
 .st-swipe-modal-content {
@@ -1176,6 +1198,15 @@
   --st-swipe-button-hover-border: #344e6c;
   --st-swipe-button-text: #233a53;
   --st-swipe-star-color: #233a53;
+}
+
+/* Keep the actual glyph dark even when host span/icon rules override inheritance. */
+#st-swipe-preview-modal[data-swipe-theme="light"] .st-swipe-action-favorite:not(.active):not([aria-pressed="true"]) > .st-swipe-star {
+  color: #233a53 !important;
+  -webkit-text-fill-color: #233a53 !important;
+  opacity: 1;
+  filter: none;
+  text-shadow: none;
 }
 
 #st-swipe-annotation-modal[data-swipe-theme="light"] .st-swipe-annotation-save {

@@ -405,6 +405,11 @@ const initialization = (async function () {
 
     // 状态
     let currentViewIdx = Number.isInteger(focusIdx) ? focusIdx : currentSwipeId;
+    let viewingMode = settings.viewingMode;
+    const viewingModeButton = document.createElement('button');
+    viewingModeButton.type = 'button';
+    viewingModeButton.className = 'menu_button st-swipe-viewing-mode-toggle';
+    modalOverlay.querySelector('.st-swipe-theme-toggle').after(viewingModeButton);
     /** 整体渲染预览（全局开关） */
     let renderPreviewGlobal = false;
     /** 每个分支的单独开关（优先级：单独开关覆盖全局） */
@@ -1184,6 +1189,54 @@ const initialization = (async function () {
 
     modalOverlay.addEventListener('swipe-theme-change', () => { settings = settingsApi.loadSettings(); renderAllCards(); });
 
+    const syncViewingState = () => {
+      contentEl.querySelectorAll('.st-swipe-card').forEach(card => {
+        card.hidden = viewingMode === 'single' && Number(card.dataset.idx) !== currentViewIdx;
+      });
+      jumpListEl.querySelectorAll('.st-swipe-jump-item').forEach(button => {
+        const viewing = Number(button.dataset.idx) === currentViewIdx;
+        button.classList.toggle('is-viewing', viewing);
+        button.setAttribute('aria-label', `分支 ${Number(button.dataset.idx) + 1}${viewing ? '，正在浏览' : ''}${Number(button.dataset.idx) === currentSwipeId ? '，当前楼层分支' : ''}`);
+      });
+      viewingModeButton.textContent = viewingMode === 'single' ? '单个观看' : '整体观看';
+      viewingModeButton.title = viewingMode === 'single' ? '切换为整体观看模式' : '切换为单个观看模式';
+      viewingModeButton.setAttribute('aria-label', viewingModeButton.title);
+      viewingModeButton.setAttribute('aria-pressed', String(viewingMode === 'all'));
+    };
+    // Use the content viewport's center, not the host's selected swipe, as browsing state.
+    let viewingFrame = null;
+    const trackViewingCard = () => {
+      if (closed || viewingMode !== 'all') return;
+      const viewport = contentEl.getBoundingClientRect();
+      const center = viewport.top + contentEl.clientTop + contentEl.clientHeight / 2;
+      let nearest = null, distance = Infinity;
+      contentEl.querySelectorAll('.st-swipe-card').forEach(card => {
+        const rect = card.getBoundingClientRect();
+        const delta = Math.max(rect.top - center, center - rect.bottom, 0);
+        if (delta < distance) { nearest = card; distance = delta; }
+      });
+      if (nearest) {
+        currentViewIdx = Number(nearest.dataset.idx);
+        syncViewingState();
+      }
+    };
+    const scheduleViewingTrack = () => {
+      if (viewingFrame !== null || closed) return;
+      viewingFrame = requestAnimationFrame(() => { viewingFrame = null; trackViewingCard(); });
+    };
+    contentEl.addEventListener('scroll', scheduleViewingTrack, { passive: true });
+    const viewingResizeObserver = new ResizeObserver(scheduleViewingTrack);
+    viewingResizeObserver.observe(contentEl);
+    viewingModeButton.addEventListener('click', () => {
+      if (busy || cancelEdit) return;
+      try {
+        const next = viewingMode === 'single' ? 'all' : 'single';
+        settings = settingsApi.saveSettingsPatch({ viewingMode: next });
+        viewingMode = next;
+        scrollToIdx(currentViewIdx);
+      } catch (error) { globalThis.toastr?.error?.(error.message); }
+    });
+
     const scrollToIdx = (idx, behavior = 'auto') => {
       if (!swipes.length) {
         currentViewIdx = 0;
@@ -1192,6 +1245,7 @@ const initialization = (async function () {
 
       const targetIdx = clampSwipeIdx(idx, swipes.length);
       currentViewIdx = targetIdx;
+      syncViewingState();
 
       // NOTE(mobile): 直接对卡片做 scrollIntoView 在部分移动端浏览器中会“联动滚动”到页面底层的聊天区域，
       // 导致背景页面被意外滚动甚至回不去。这里强制只滚动模态框内部的内容容器。
@@ -1214,23 +1268,15 @@ const initialization = (async function () {
     };
 
     const scrollToCurrentEdge = (edge) => {
-      const cards = [...contentEl.querySelectorAll('.st-swipe-card')];
+      trackViewingCard();
+      const cards = [...contentEl.querySelectorAll('.st-swipe-card')].filter(card => !card.hidden);
       if (!cards.length) return;
       const viewport = contentEl.getBoundingClientRect();
       const top = viewport.top + contentEl.clientTop;
       const bottom = top + contentEl.clientHeight;
-      const visibleHeight = card => {
-        const rect = card.getBoundingClientRect();
-        return Math.max(0, Math.min(rect.bottom, bottom) - Math.max(rect.top, top));
-      };
-      // Keep an explicitly selected short card when fully visible. Otherwise use
-      // the most visible card, so manual scrolling cannot target an offscreen swipe.
-      let card = cards.find(item => Number(item.dataset.idx) === currentViewIdx);
-      const rect = card?.getBoundingClientRect();
-      if (!rect || rect.top < top || rect.bottom > bottom) {
-        card = cards.reduce((best, item) => visibleHeight(item) > visibleHeight(best) ? item : best, card || cards[0]);
-      }
+      const card = cards.find(item => Number(item.dataset.idx) === currentViewIdx) || cards[0];
       currentViewIdx = Number(card.dataset.idx);
+      syncViewingState();
       const target = card.getBoundingClientRect();
       const delta = edge === 'bottom' ? target.bottom - bottom + 8 : target.top - top - 8;
       contentEl.scrollTo({ top: Math.max(0, contentEl.scrollTop + delta), behavior: 'auto' });
@@ -1352,6 +1398,11 @@ const initialization = (async function () {
       renderTitle();
       renderJumpList();
       renderCardsMarkup();
+      currentViewIdx = clampSwipeIdx(focusIdx);
+      syncViewingState();
+      viewingResizeObserver.disconnect();
+      viewingResizeObserver.observe(contentEl);
+      contentEl.querySelectorAll('.st-swipe-card').forEach(card => viewingResizeObserver.observe(card));
       bindDynamicEvents();
       renderAllCards();
       if (!Array.isArray(originMessage.swipes) || !originMessage.swipes.length || originMessage.is_user || originMessage.extra?.isSmallSys) {
@@ -1719,12 +1770,15 @@ const initialization = (async function () {
 
     // 绑定关闭逻辑
     function closeModal() {
+      viewingResizeObserver.disconnect();
+      if (viewingFrame !== null) cancelAnimationFrame(viewingFrame);
       if (closed) return;
       closed = true;
       clearTimeout(navIdleTimer);
       if (mobileNavigation.removeEventListener) mobileNavigation.removeEventListener('change', syncNavigationLayout);
       else mobileNavigation.removeListener(syncNavigationLayout);
       contentEl.removeEventListener('scroll', fadeNavigation);
+      contentEl.removeEventListener('scroll', scheduleViewingTrack);
       previewBody.removeEventListener('wheel', fadeNavigation);
       previewBody.removeEventListener('touchmove', fadeNavigation);
       previewNav.classList.remove('is-scrolling');
